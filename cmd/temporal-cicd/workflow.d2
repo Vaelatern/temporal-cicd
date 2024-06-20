@@ -1,0 +1,35 @@
+ndm: New Deploy Management
+au: Artifact Upload
+dp-dev: Deploy to Named Environment
+
+Git alert of new tag -> ndm
+Git alert of new branch -> ndm
+
+Git alert of modified tag -> Signal workflow to kill tag
+Git alert of modified branch -> Signal workflow to update branch -> Wait for branch update
+
+ndm -> SmartSheet Row Add
+
+ndm -> Workflow Exists -> Build -> Test -> au -> SmartSheet Row Attach Log
+
+au -> SmartSheet Row Note Status
+
+au -> Wait for Signal : tag
+au -> Deploy to Named Environment : branch
+Deploy to Named Environment -> Remove environment : When signaled
+Deploy to Named Environment -> Wait for branch update -> Workflow Exists
+Deploy to Named Environment -> Set up artificial / test data source -> Wait for branch update
+
+SmartSheet alert of signoff -> Wait for Signal
+Wait for Signal -> Wait for Signal : Until all signoffs done
+
+Wait for Signal -> Deploy to Prod : Signoffs complete
+
+Deploy to Prod -> Kick out old build
+Kick out old build -> Smartsheet Row Updated -> Workflow Terminate
+
+Git alert of deleted branch -> Wait for branch update -> Remove environment -> Wait 6 months
+
+Signal workflow to kill tag -> Mark row corrupted in SmartSheet -> Wait 6 months -> Remove row
+
+Smartsheet alert of Undeploy -> Wait for branch update
