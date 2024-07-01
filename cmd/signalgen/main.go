@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -42,5 +43,11 @@ func DeploySignal(reqs <-chan ProcessedRequest) {
 	select {
 	case req := <-reqs:
 		fmt.Println(req)
+	}
+	signal := SmartSheetTask{}
+	err = temporalClient.SignalWorkflow(context.Background(), "your-workflow-id", runID, "message-from-smartsheet", signal)
+	if err != nil {
+		log.Fatalln("Error sending the Signal", err)
+		return
 	}
 }
