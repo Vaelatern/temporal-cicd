@@ -7,49 +7,19 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// PodmanBuildWorkflow triggers a podman build and publish
-func PodmanBuildWorkflow(ctx workflow.Context) error {
-	workflow.GetLogger(ctx).Info("Starting podman build", "StartTime", workflow.Now(ctx))
-
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 24 * time.Hour,
-		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 10,
-		},
-	}
-	ctx1 := workflow.WithActivityOptions(ctx, ao)
-
-	err := workflow.ExecuteActivity(ctx1, PodmanBuild, "https://github.com/Vaelatern/http-pdf-generator").Get(ctx, nil)
-	if err != nil {
-		workflow.GetLogger(ctx).Error("schedule workflow failed.", "Error", err)
-		return err
-	}
-	return nil
-}
-
-// MakeBuildWorkflow triggers a make build and make publish
-func MakeBuildWorkflow(ctx workflow.Context) error {
-	workflow.GetLogger(ctx).Info("Starting podman build", "StartTime", workflow.Now(ctx))
-
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 24 * time.Hour,
-		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 10,
-		},
-	}
-	ctx1 := workflow.WithActivityOptions(ctx, ao)
-
-	err := workflow.ExecuteActivity(ctx1, MakeBuild, "https://github.com/Vaelatern/http-pdf-generator").Get(ctx, nil)
-	if err != nil {
-		workflow.GetLogger(ctx).Error("schedule workflow failed.", "Error", err)
-		return err
-	}
-	return nil
+type BuildDetails struct {
+	name        string
+	hash        string
+	permanent   bool
+	updateindex int
 }
 
 // BuildLifecycleWorkflow triggers a make build and make publish
 func BuildLifecycleWorkflow(ctx workflow.Context) error {
 	workflow.GetLogger(ctx).Info("We have a new release to handle, and we will from now to the end", "StartTime", workflow.Now(ctx))
+
+	b := BuildDetails{}
+	signalChan := workflow.GetSignalChannel(ctx, "message-from-smartsheet")
 
 	var signal SmartSheetTask
 	end_of_life_timeout := 6 * 31 * 24 * time.Hour
@@ -89,28 +59,20 @@ build:
 
 	if tag {
 		for {
-			signalChan := workflow.GetSignalChannel(ctx, "message-from-smartsheet")
 			signalChan.Receive(ctx, &signal)
 			if signal.AllSignoffs {
 				break
 			}
 		}
-		if tag_changed {
-			err := workflow.ExecuteActivity(ctx1, MarkRowTamperedSmartsheet).Get(ctx, nil)
-			if err != nil {
-				return err
-			}
-			goto end_of_life
-
-		}
 		err := workflow.ExecuteActivity(ctx1, DeployToEnv, "prod").Get(ctx, nil)
 		if err != nil {
 			return err
 		}
-	}
-	err = workflow.ExecuteActivity(ctx1, DeployToEnv, "branch_name").Get(ctx, nil)
-	if err != nil {
-		return err
+	} else {
+		err = workflow.ExecuteActivity(ctx1, DeployToEnv, "branch_name").Get(ctx, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	for {
@@ -120,15 +82,19 @@ build:
 		})
 		selector.Select(ctx)
 	}
-	if signal_branch_changed {
+
+end_of_life:
+	received, _ := signalChan.ReceiveWithTimeout(ctx, end_of_life_timeout, &signal)
+	if received && b.permanent {
+		err := workflow.ExecuteActivity(ctx1, MarkRowTamperedSmartsheet).Get(ctx, nil)
+		if err != nil {
+			return err
+		}
+		goto end_of_life
+	} else if received {
 		goto build
 	}
 
-end_of_life:
-	err = workflow.Sleep(ctx, end_of_life_timeout) // 6 months normally
-	if err != nil {
-		return err
-	}
 	err = workflow.ExecuteActivity(ctx1, DeleteRowFromSmartsheet).Get(ctx, nil)
 	if err != nil {
 		return err

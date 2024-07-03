@@ -40,14 +40,16 @@ func GitListener(reqs chan<- ProcessedRequest) func(http.ResponseWriter, *http.R
 
 // DeploySignal signals an appropriate workflow to promote to an environment
 func DeploySignal(reqs <-chan ProcessedRequest) {
-	select {
-	case req := <-reqs:
-		fmt.Println(req)
-	}
-	signal := SmartSheetTask{}
-	err = temporalClient.SignalWorkflow(context.Background(), "your-workflow-id", runID, "message-from-smartsheet", signal)
-	if err != nil {
-		log.Fatalln("Error sending the Signal", err)
-		return
+	for {
+		select {
+		case req := <-reqs:
+			fmt.Println(req)
+		}
+		signal := SmartSheetTask{}
+		err = temporalClient.SignalWorkflow(context.Background(), "your-workflow-id", runID, "message-from-smartsheet", signal)
+		if err != nil {
+			log.Fatalln("Error sending the Signal", err)
+			return
+		}
 	}
 }

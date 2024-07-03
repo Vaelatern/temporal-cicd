@@ -16,21 +16,18 @@ type SmartSheetTask struct {
 // SmartSheetNotify
 func SmartSheetNotify(ctx context.Context, task SmartSheetTask) error {
 	activity.GetLogger(ctx).Info("Injecting a row in SmartSheet")
-
 	return nil
 }
 
 // AddRowToSmartsheet
 func AddRowToSmartsheet(ctx context.Context, task SmartSheetTask) error {
 	activity.GetLogger(ctx).Info("Adding a row to SmartSheet")
-
 	return nil
 }
 
 // SetDetailsInSmartsheet
 func SetDetailsInSmartsheet(ctx context.Context, task SmartSheetTask) error {
 	activity.GetLogger(ctx).Info("Noting details in Smartsheet")
-
 	return nil
 }
 
