@@ -2,6 +2,9 @@
 
 build: temporal-cicd signalgen
 
+test:
+	go test ./...
+
 clean:
 	rm -f temporal-cicd signalgen
 
