@@ -1,24 +1,15 @@
 package main
 
 import (
-	"log/slog"
-	"os"
-
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/worker"
+
+	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 )
 
 func main() {
-	logger := log.NewStructuredLogger(
-		slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			AddSource: true,
-			Level:     slog.LevelDebug,
-		})))
-	clientOptions := client.Options{
-		Logger: logger,
-	}
-	temporalClient, err := client.Dial(clientOptions)
+	logger := temporal.Logger()
+
+	temporalClient, err := temporal.EasyClient(logger)
 
 	if err != nil {
 		logger.Error("Unable to create client", err)

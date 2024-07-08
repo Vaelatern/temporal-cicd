@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"go.temporal.io/sdk/client"
+
+	"github.com/Vaelatern/temporal-cicd/internal/event"
+	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 )
 
 type ProcessedRequest struct {
@@ -15,12 +20,16 @@ type ProcessedRequest struct {
 }
 
 func main() {
-	fmt.Println("vim-go")
 	reqs := make(chan ProcessedRequest, 10)
+
+	temporalClient, err := temporal.EasyClient(temporal.Logger())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	http.HandleFunc("/ss", SSListener(reqs))
 	http.HandleFunc("/git", GitListener(reqs))
-	go DeploySignal(reqs)
+	go DeploySignal(temporalClient, reqs)
 	log.Fatal(http.ListenAndServe("", nil))
 }
 
@@ -39,14 +48,14 @@ func GitListener(reqs chan<- ProcessedRequest) func(http.ResponseWriter, *http.R
 }
 
 // DeploySignal signals an appropriate workflow to promote to an environment
-func DeploySignal(reqs <-chan ProcessedRequest) {
+func DeploySignal(temporalClient client.Client, reqs <-chan ProcessedRequest) {
 	for {
 		select {
 		case req := <-reqs:
 			fmt.Println(req)
 		}
-		signal := SmartSheetTask{}
-		err = temporalClient.SignalWorkflow(context.Background(), "your-workflow-id", runID, "message-from-smartsheet", signal)
+		signal := event.SmartSheetTask{}
+		err := temporalClient.SignalWorkflow(context.Background(), "your-workflow-id", "", "message-from-smartsheet", signal)
 		if err != nil {
 			log.Fatalln("Error sending the Signal", err)
 			return

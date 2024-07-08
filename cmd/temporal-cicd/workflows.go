@@ -5,6 +5,8 @@ import (
 
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
+
+	"github.com/Vaelatern/temporal-cicd/internal/event"
 )
 
 type BuildDetails struct {
@@ -19,12 +21,11 @@ func BuildLifecycleWorkflow(ctx workflow.Context) error {
 	workflow.GetLogger(ctx).Info("We have a new release to handle, and we will from now to the end", "StartTime", workflow.Now(ctx))
 
 	b := BuildDetails{}
-	signalChan := workflow.GetSignalChannel(ctx, "message-from-smartsheet")
+	smartsheetSignal := workflow.GetSignalChannel(ctx, "message-from-smartsheet")
+	gitSignalChan := workflow.GetSignalChannel(ctx, "message-from-git")
 
-	var signal SmartSheetTask
+	var signal event.SmartSheetTask
 	end_of_life_timeout := 6 * 31 * 24 * time.Hour
-
-	var tag bool = false
 
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 24 * time.Minute,
@@ -57,9 +58,9 @@ build:
 		return err
 	}
 
-	if tag {
+	if b.permanent {
 		for {
-			signalChan.Receive(ctx, &signal)
+			smartsheetSignal.Receive(ctx, &signal)
 			if signal.AllSignoffs {
 				break
 			}
@@ -69,22 +70,14 @@ build:
 			return err
 		}
 	} else {
-		err = workflow.ExecuteActivity(ctx1, DeployToEnv, "branch_name").Get(ctx, nil)
+		err = workflow.ExecuteActivity(ctx1, DeployToEnv, b.name).Get(ctx, nil)
 		if err != nil {
 			return err
 		}
 	}
 
-	for {
-		selector := workflow.NewSelector(ctx)
-		selector.AddReceive(signalChan, func(c workflow.ReceiveChannel, more bool) {
-			c.Receive(ctx, &signal)
-		})
-		selector.Select(ctx)
-	}
-
 end_of_life:
-	received, _ := signalChan.ReceiveWithTimeout(ctx, end_of_life_timeout, &signal)
+	received, _ := gitSignalChan.ReceiveWithTimeout(ctx, end_of_life_timeout, &signal)
 	if received && b.permanent {
 		err := workflow.ExecuteActivity(ctx1, MarkRowTamperedSmartsheet).Get(ctx, nil)
 		if err != nil {
