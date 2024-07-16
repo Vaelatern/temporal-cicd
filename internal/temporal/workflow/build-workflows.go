@@ -1,10 +1,12 @@
-package main
+package workflow
 
 import (
 	"time"
 
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
+
+	"github.com/Vaelatern/temporal-cicd/internal/temporal/activity"
 )
 
 // PodmanBuildWorkflow triggers a podman build and publish
@@ -19,7 +21,7 @@ func PodmanBuildWorkflow(ctx workflow.Context) error {
 	}
 	ctx1 := workflow.WithActivityOptions(ctx, ao)
 
-	err := workflow.ExecuteActivity(ctx1, PodmanBuild, "https://github.com/Vaelatern/http-pdf-generator").Get(ctx, nil)
+	err := workflow.ExecuteActivity(ctx1, activity.PodmanBuild, "https://github.com/Vaelatern/http-pdf-generator").Get(ctx, nil)
 	if err != nil {
 		workflow.GetLogger(ctx).Error("schedule workflow failed.", "Error", err)
 		return err
@@ -29,7 +31,7 @@ func PodmanBuildWorkflow(ctx workflow.Context) error {
 
 // MakeBuildWorkflow triggers a make build and make publish
 func MakeBuildWorkflow(ctx workflow.Context) error {
-	workflow.GetLogger(ctx).Info("Starting podman build", "StartTime", workflow.Now(ctx))
+	workflow.GetLogger(ctx).Info("Starting make build", "StartTime", workflow.Now(ctx))
 
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 24 * time.Hour,
@@ -39,7 +41,9 @@ func MakeBuildWorkflow(ctx workflow.Context) error {
 	}
 	ctx1 := workflow.WithActivityOptions(ctx, ao)
 
-	err := workflow.ExecuteActivity(ctx1, MakeBuild, "https://github.com/Vaelatern/http-pdf-generator").Get(ctx, nil)
+	br := activity.BuildResponse{}
+
+	err := workflow.ExecuteActivity(ctx1, activity.MakeBuild, activity.BuildDetails{}).Get(ctx, &br)
 	if err != nil {
 		workflow.GetLogger(ctx).Error("schedule workflow failed.", "Error", err)
 		return err

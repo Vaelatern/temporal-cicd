@@ -4,6 +4,8 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	"github.com/Vaelatern/temporal-cicd/internal/temporal"
+	"github.com/Vaelatern/temporal-cicd/internal/temporal/activity"
+	"github.com/Vaelatern/temporal-cicd/internal/temporal/workflow"
 )
 
 func main() {
@@ -19,13 +21,22 @@ func main() {
 
 	w := worker.New(temporalClient, "cicd", worker.Options{})
 
-	w.RegisterActivity(SmartSheetNotify)
+	w.RegisterWorkflow(workflow.PodmanBuildWorkflow)
+	w.RegisterActivity(activity.PodmanBuild)
 
-	w.RegisterWorkflow(PodmanBuildWorkflow)
-	w.RegisterActivity(PodmanBuild)
+	w.RegisterWorkflow(workflow.MakeBuildWorkflow)
+	w.RegisterActivity(activity.MakeBuild)
 
-	w.RegisterWorkflow(MakeBuildWorkflow)
-	w.RegisterActivity(MakeBuild)
+	w.RegisterWorkflow(workflow.BuildLifecycleWorkflow)
+
+	w.RegisterActivity(activity.SmartSheetNotify)
+	w.RegisterActivity(activity.AddRowToSmartsheet)
+	w.RegisterActivity(activity.SetDetailsInSmartsheet)
+	w.RegisterActivity(activity.UploadBuildResultsToSmartsheet)
+	w.RegisterActivity(activity.DeclareBuildReadySmartsheet)
+	w.RegisterActivity(activity.MarkRowTamperedSmartsheet)
+	w.RegisterActivity(activity.DeployToEnv)
+	w.RegisterActivity(activity.DeleteRowFromSmartsheet)
 
 	err = w.Run(worker.InterruptCh())
 	if err != nil {

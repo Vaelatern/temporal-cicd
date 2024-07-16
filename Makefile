@@ -6,14 +6,14 @@ test:
 	go test ./...
 
 clean:
-	rm -f temporal-cicd signalgen
+	rm -f temporal-cicd signalgen gitolite-send-event
 
-gitolite-send-event: cmd/gitolite-send-event/*.go internal/*/*.go
+gitolite-send-event: cmd/gitolite-send-event/*.go internal/*/*.go internal/*/*/*.go
 	go build ./cmd/gitolite-send-event
 
-signalgen: cmd/signalgen/*.go internal/*/*.go
+signalgen: cmd/signalgen/*.go internal/*/*.go internal/*/*/*.go
 	go build ./cmd/signalgen
 
-temporal-cicd: cmd/temporal-cicd/*.go internal/*/*.go
+temporal-cicd: cmd/temporal-cicd/*.go internal/*/*.go internal/*/*/*.go
 	go build ./cmd/temporal-cicd
 

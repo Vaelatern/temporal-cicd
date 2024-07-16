@@ -1,4 +1,4 @@
-package main
+package workflow
 
 import (
 	"time"
@@ -7,6 +7,7 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/Vaelatern/temporal-cicd/internal/event"
+	"github.com/Vaelatern/temporal-cicd/internal/temporal/activity"
 )
 
 type BuildDetails struct {
@@ -35,25 +36,24 @@ func BuildLifecycleWorkflow(ctx workflow.Context) error {
 	}
 	ctx1 := workflow.WithActivityOptions(ctx, ao)
 
-	err := workflow.ExecuteActivity(ctx1, AddRowToSmartsheet).Get(ctx, nil)
+	err := workflow.ExecuteActivity(ctx1, activity.AddRowToSmartsheet).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
 build:
-	err = workflow.ExecuteActivity(ctx1, SetDetailsInSmartsheet).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx1, activity.SetDetailsInSmartsheet).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
-	var build_result error
-	err = workflow.ExecuteChildWorkflow(ctx, MakeBuildWorkflow).Get(ctx, &build_result)
+	err = workflow.ExecuteChildWorkflow(ctx, MakeBuildWorkflow).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
-	err = workflow.ExecuteActivity(ctx1, UploadBuildResultsToSmartsheet).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx1, activity.UploadBuildResultsToSmartsheet).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
-	err = workflow.ExecuteActivity(ctx1, DeclareBuildReadySmartsheet).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx1, activity.DeclareBuildReadySmartsheet).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -65,12 +65,12 @@ build:
 				break
 			}
 		}
-		err := workflow.ExecuteActivity(ctx1, DeployToEnv, "prod").Get(ctx, nil)
+		err := workflow.ExecuteActivity(ctx1, activity.DeployToEnv, activity.DeployEnv{Name: "prod"}).Get(ctx, nil)
 		if err != nil {
 			return err
 		}
 	} else {
-		err = workflow.ExecuteActivity(ctx1, DeployToEnv, b.name).Get(ctx, nil)
+		err = workflow.ExecuteActivity(ctx1, activity.DeployToEnv, activity.DeployEnv{Name: b.name}).Get(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ build:
 end_of_life:
 	received, _ := gitSignalChan.ReceiveWithTimeout(ctx, end_of_life_timeout, &signal)
 	if received && b.permanent {
-		err := workflow.ExecuteActivity(ctx1, MarkRowTamperedSmartsheet).Get(ctx, nil)
+		err := workflow.ExecuteActivity(ctx1, activity.MarkRowTamperedSmartsheet).Get(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ end_of_life:
 		goto build
 	}
 
-	err = workflow.ExecuteActivity(ctx1, DeleteRowFromSmartsheet).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx1, activity.DeleteRowFromSmartsheet).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
