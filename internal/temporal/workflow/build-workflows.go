@@ -30,7 +30,7 @@ func PodmanBuildWorkflow(ctx workflow.Context) error {
 }
 
 // MakeBuildWorkflow triggers a make build and make publish
-func MakeBuildWorkflow(ctx workflow.Context) error {
+func MakeBuildWorkflow(ctx workflow.Context, build_coords activity.BuildDetails) error {
 	workflow.GetLogger(ctx).Info("Starting make build", "StartTime", workflow.Now(ctx))
 
 	ao := workflow.ActivityOptions{
@@ -43,7 +43,7 @@ func MakeBuildWorkflow(ctx workflow.Context) error {
 
 	br := activity.BuildResponse{}
 
-	err := workflow.ExecuteActivity(ctx1, activity.MakeBuild, activity.BuildDetails{}).Get(ctx, &br)
+	err := workflow.ExecuteActivity(ctx1, activity.MakeBuild, build_coords).Get(ctx, &br)
 	if err != nil {
 		workflow.GetLogger(ctx).Error("schedule workflow failed.", "Error", err)
 		return err

@@ -10,18 +10,11 @@ import (
 	"github.com/Vaelatern/temporal-cicd/internal/temporal/activity"
 )
 
-type BuildDetails struct {
-	name        string
-	hash        string
-	permanent   bool
-	updateindex int
-}
-
-// BuildLifecycleWorkflow triggers a make build and make publish
-func BuildLifecycleWorkflow(ctx workflow.Context) error {
+// SmartSheetManagedBuildLifecycleWorkflow triggers a make build and make publish
+func SmartSheetManagedBuildLifecycleWorkflow(ctx workflow.Context) error {
 	workflow.GetLogger(ctx).Info("We have a new release to handle, and we will from now to the end", "StartTime", workflow.Now(ctx))
 
-	b := BuildDetails{}
+	b := activity.BuildDetails{}
 	smartsheetSignal := workflow.GetSignalChannel(ctx, "message-from-smartsheet")
 	gitSignalChan := workflow.GetSignalChannel(ctx, "message-from-git")
 
@@ -45,7 +38,7 @@ build:
 	if err != nil {
 		return err
 	}
-	err = workflow.ExecuteChildWorkflow(ctx, MakeBuildWorkflow).Get(ctx, nil)
+	err = workflow.ExecuteChildWorkflow(ctx, MakeBuildWorkflow, b).Get(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -58,7 +51,7 @@ build:
 		return err
 	}
 
-	if b.permanent {
+	if b.Reference.Permanent {
 		for {
 			smartsheetSignal.Receive(ctx, &signal)
 			if signal.AllSignoffs {
@@ -70,7 +63,7 @@ build:
 			return err
 		}
 	} else {
-		err = workflow.ExecuteActivity(ctx1, activity.DeployToEnv, activity.DeployEnv{Name: b.name}).Get(ctx, nil)
+		err = workflow.ExecuteActivity(ctx1, activity.DeployToEnv, activity.DeployEnv{Name: b.Reference.Name}).Get(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -78,7 +71,7 @@ build:
 
 end_of_life:
 	received, _ := gitSignalChan.ReceiveWithTimeout(ctx, end_of_life_timeout, &signal)
-	if received && b.permanent {
+	if received && b.Reference.Permanent {
 		err := workflow.ExecuteActivity(ctx1, activity.MarkRowTamperedSmartsheet).Get(ctx, nil)
 		if err != nil {
 			return err

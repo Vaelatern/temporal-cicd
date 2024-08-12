@@ -5,7 +5,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func (s *UnitTestSuite) Test_BuildLifecycleWorkflowGoldenPath() {
+func (s *UnitTestSuite) Test_SmartSheetManagedBuildLifecycleWorkflowGoldenPath() {
 	s.env.OnActivity(activity.AddRowToSmartsheet, mock.Anything, mock.Anything).Return(activity.SmartSheetTaskResponse{}, nil)
 	s.env.OnActivity(activity.SetDetailsInSmartsheet, mock.Anything, mock.Anything).Return(activity.SmartSheetTaskResponse{}, nil)
 	s.env.OnActivity(activity.MakeBuild, mock.Anything, mock.Anything).Return(activity.BuildResponse{}, nil)
@@ -19,7 +19,7 @@ func (s *UnitTestSuite) Test_BuildLifecycleWorkflowGoldenPath() {
 
 	s.env.RegisterWorkflow(MakeBuildWorkflow)
 
-	s.env.ExecuteWorkflow(BuildLifecycleWorkflow)
+	s.env.ExecuteWorkflow(SmartSheetManagedBuildLifecycleWorkflow)
 
 	s.True(s.env.IsWorkflowCompleted())
 
@@ -27,7 +27,7 @@ func (s *UnitTestSuite) Test_BuildLifecycleWorkflowGoldenPath() {
 	s.NoError(err)
 }
 
-func (s *UnitTestSuite) Test_BuildLifecycleWorkflowAlmostGoldenPath() {
+func (s *UnitTestSuite) Test_SmartSheetManagedBuildLifecycleWorkflowAlmostGoldenPath() {
 	s.env.OnActivity(activity.AddRowToSmartsheet, mock.Anything, mock.Anything).Return(activity.SmartSheetTaskResponse{}, nil)
 	s.env.OnActivity(activity.SetDetailsInSmartsheet, mock.Anything, mock.Anything).Return(activity.SmartSheetTaskResponse{}, nil)
 	s.env.OnActivity(activity.MakeBuild, mock.Anything, mock.Anything).Return(activity.BuildResponse{}, nil)
@@ -41,7 +41,7 @@ func (s *UnitTestSuite) Test_BuildLifecycleWorkflowAlmostGoldenPath() {
 
 	s.env.RegisterWorkflow(MakeBuildWorkflow)
 
-	s.env.ExecuteWorkflow(BuildLifecycleWorkflow)
+	s.env.ExecuteWorkflow(SmartSheetManagedBuildLifecycleWorkflow)
 
 	s.True(s.env.IsWorkflowCompleted())
 

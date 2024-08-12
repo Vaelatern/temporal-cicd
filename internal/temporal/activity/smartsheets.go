@@ -3,11 +3,18 @@ package activity
 import (
 	"context"
 
+	"github.com/william20111/go-smartsheet/pkg/smartsheet"
 	"go.temporal.io/sdk/activity"
 )
 
 type SmartSheetTask struct{}
 type SmartSheetTaskResponse struct{}
+
+func setup() *smartsheet.Client {
+	options := smartsheet.ClientOptions{}
+	client := smartsheet.NewSmartsheetClient(&options)
+	return client
+}
 
 // SmartSheetNotify
 func SmartSheetNotify(ctx context.Context, task SmartSheetTask) (SmartSheetTaskResponse, error) {

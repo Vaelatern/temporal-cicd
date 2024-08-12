@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"go.temporal.io/sdk/worker"
 
 	"github.com/Vaelatern/temporal-cicd/internal/temporal"
@@ -15,6 +17,7 @@ func main() {
 
 	if err != nil {
 		logger.Error("Unable to create client", err)
+		os.Exit(1)
 	}
 
 	defer temporalClient.Close()
@@ -27,7 +30,7 @@ func main() {
 	w.RegisterWorkflow(workflow.MakeBuildWorkflow)
 	w.RegisterActivity(activity.MakeBuild)
 
-	w.RegisterWorkflow(workflow.BuildLifecycleWorkflow)
+	w.RegisterWorkflow(workflow.SmartSheetManagedBuildLifecycleWorkflow)
 
 	w.RegisterActivity(activity.SmartSheetNotify)
 	w.RegisterActivity(activity.AddRowToSmartsheet)

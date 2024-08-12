@@ -36,7 +36,7 @@ func TestMakeBuildWorkflow(t *testing.T) {
 
 func (s *UnitTestSuite) Test_MakeBuild_ActivityFails() {
 	s.env.OnActivity(activity.MakeBuild, mock.Anything, mock.Anything).Return(activity.BuildResponse{}, errors.New("Incorrect Function"))
-	s.env.ExecuteWorkflow(MakeBuildWorkflow)
+	s.env.ExecuteWorkflow(MakeBuildWorkflow, activity.BuildDetails{})
 
 	s.True(s.env.IsWorkflowCompleted())
 
