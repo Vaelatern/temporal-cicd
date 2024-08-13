@@ -69,5 +69,15 @@ func MakeBuild(ctx context.Context, bd BuildDetails) (BuildResponse, error) {
 
 	err = cmd.Run()
 
+	if err != nil {
+		newErr := fmt.Errorf("Build step failed")
+		return BuildResponse{}, errors.Join(newErr, err)
+	}
+
+	cmd = exec.CommandContext(ctx, path, "publish")
+	cmd.Dir = workdir
+
+	err = cmd.Run()
+
 	return BuildResponse{}, err
 }
