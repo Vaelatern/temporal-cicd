@@ -7,35 +7,22 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
+	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
 )
 
 type KickoffRequest struct {
-	Repository string `json:"repository"`
-	Ref        string `json:"ref"`
+	Repository   string `json:"repository"`
+	Ref          string `json:"ref"`
+	BuildPattern string `json:"build-pattern"`
+	ApplyPatch   string `json:"compat-patch"`
 }
 
 func kickoffHandler(w http.ResponseWriter, r *http.Request) {
-	if !basicauth.Authorize(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/kickoff/"), "/")
-	if len(parts) != 2 {
-		http.Error(w, "invalid path", http.StatusBadRequest)
-		return
-	}
-	repo := parts[0]
-	ref := parts[1]
+	repo := r.PathValue("repo")
+	ref := r.PathValue("ref")
 
 	kick := KickoffRequest{
 		Repository: repo,
@@ -59,15 +46,20 @@ func kickoffHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	basicauth.LoadAuth()
+	auth := basicauth.AuthCore{KeyDir: "../keys"}
+	auth.LoadAuth()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGUSR1)
 	go func() {
 		for range sig {
-			basicauth.ReloadAuth()
+			auth.ReloadAuth()
 		}
 	}()
 
-	http.HandleFunc("/kickoff/", kickoffHandler)
-	log.Fatal(http.ListenAndServe(":8082", nil))
+	r := aerouter.NewRouter()
+
+	r.Use(auth.AuthMiddleware)
+
+	r.HandleFunc("KICKOFF /{repo}/{ref}", kickoffHandler)
+	log.Fatal(http.ListenAndServe(":8083", r))
 }
