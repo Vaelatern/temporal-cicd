@@ -1,0 +1,51 @@
+direction: right
+ndm: New Deploy Management
+au: Artifact Upload
+dp-dev: Deploy to Named Environment
+
+Git alert of new tag  : {shape: callout}
+Git alert of new branch  : {shape: callout}
+Git alert of modified tag  : {shape: callout}
+Git alert of modified branch  : {shape: callout}
+Git alert of deleted branch  : {shape: callout}
+SmartSheet Row Add : {shape: cloud}
+SmartSheet Row Attach Log : {shape: cloud}
+SmartSheet Row Note Status : {shape: cloud}
+SmartSheet alert of signoff : {shape: callout}
+Smartsheet Row Updated : {shape: cloud}
+Mark row corrupted in SmartSheet : {shape: cloud}
+Smartsheet alert of Undeploy : {shape: callout}
+
+Git alert of new tag -> ndm
+Git alert of new branch -> ndm
+
+Git alert of modified tag -> Signal workflow to kill tag : {style.stroke: red}
+Git alert of modified branch -> Signal workflow to update branch -> Wait for branch update
+
+ndm -> SmartSheet Row Add
+
+ndm -> Workflow Exists -> Build -> Test -> au -> SmartSheet Row Attach Log
+
+au -> SmartSheet Row Note Status
+
+au -> Wait for Signal : tag
+au -> dp-dev : branch
+dp-dev -> Remove environment : When signaled
+dp-dev -> Wait for branch update -> Workflow Exists
+dp-dev -> Set up artificial / test data source -> Wait for branch update
+
+SmartSheet alert of signoff -> Wait for Signal
+Wait for Signal -> Wait for Signal : Until all signoffs done
+
+Wait for Signal -> Deploy to Prod : Signoffs complete
+
+Deploy to Prod -> Kick out old build
+Kick out old build -> Smartsheet Row Updated -> Wait 6 months
+
+Git alert of deleted branch -> Wait for branch update -> Remove environment : {style.stroke: orange}
+
+Remove environment -> Wait 6 months -> Remove row
+
+Signal workflow to kill tag -> Mark row corrupted in SmartSheet -> Wait 6 months : {style.stroke: red}
+
+Smartsheet alert of Undeploy -> Wait for branch update : {style.stroke: orange}
