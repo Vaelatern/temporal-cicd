@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/activity"
-	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 )
@@ -29,9 +29,9 @@ type WorkflowOutput struct {
 	UploadOutput string
 }
 
-func GitBuildUploadWorkflow(ctx workflow.Context, input WorkflowInput) (WorkflowOutput, error) {
+func MakeBuildUpload(ctx workflow.Context, input WorkflowInput) (WorkflowOutput, error) {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting GitBuildUploadWorkflow", "repo", input.RepoName, "ref", input.Ref)
+	logger.Info("Starting MakeBuildUpload", "repo", input.RepoName, "ref", input.Ref)
 
 	sessionOptions := &workflow.SessionOptions{
 		ExecutionTimeout: 30 * time.Minute,
@@ -143,18 +143,18 @@ func UploadActivity(ctx context.Context, repoPath string) (string, error) {
 }
 
 func main() {
-	c, err := client.Dial(client.Options{})
+	c, err := temporal.EasyClient(temporal.Logger())
 	if err != nil {
 		fmt.Printf("Failed to create Temporal client: %v\n", err)
 		os.Exit(1)
 	}
 	defer c.Close()
 
-	w := worker.New(c, "git-build-upload-task-queue", worker.Options{
+	w := worker.New(c, "basic-builder", worker.Options{
 		EnableSessionWorker: true,
 	})
 
-	w.RegisterWorkflow(GitBuildUploadWorkflow)
+	w.RegisterWorkflow(MakeBuildUpload)
 	w.RegisterActivity(DownloadFromCacheActivity)
 	w.RegisterActivity(BuildActivity)
 	w.RegisterActivity(UploadActivity)

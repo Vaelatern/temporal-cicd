@@ -6,7 +6,7 @@ RUN go build -o /cache-service ./cmd/cache
 FROM alpine:latest
 RUN apk add --no-cache git openssh
 COPY --from=builder /cache-service /cache-service
-RUN mkdir -p /repos /keys.d
+RUN mkdir -p /repos /keys.d /ssh-keys /custom-kickoff /artifacts
 VOLUME ["/repos"]
 WORKDIR /repos
 ENTRYPOINT ["/cache-service"]

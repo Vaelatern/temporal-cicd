@@ -1,6 +1,6 @@
-.PHONY: build clean
+.PHONY: build-raw clean
 
-build: artifacts builder cache kickoff
+build-raw: artifacts builder cache kickoff
 
 test:
 	go test ./...
@@ -19,4 +19,5 @@ cache: cmd/cache internal/*/*.go internal/*/*/*.go
 
 kickoff: cmd/kickoff internal/*/*.go internal/*/*/*.go
 	go build ./cmd/kickoff
+
 

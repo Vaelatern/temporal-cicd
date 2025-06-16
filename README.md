@@ -37,3 +37,22 @@ This is a temporal enabled go application that pulls a tarball from the Cache se
 ### Kickoff
 
 This is a hook that is installed on a git repository that calls KICKOFF /$repository/$ref when a push happens to the git repository. Like all other HTTP actions, this requires a bearer token installed. This triggers the overall building temporal workflow. When a subsequent KICKOFF is received for a workflow already in progress, the workflow is sent a signal. The workflow then cancels any existing build, and re-runs from the cache command.
+
+An example way to kickoff:
+
+```
+curl --data @./.vaelci.json -H "Authorization: Bearer $token" -X KICKOFF http://localhost:8083/$repo/$ref
+```
+
+The data for a kickoff is
+
+```
+{
+	"repository": "repo-name",
+	"ref": "v0.1.0",
+	"build-pattern": "MakeBuildUpload",
+	"compat-patch": ""
+}
+```
+
+where the `compat-patch` will be fed to `git apply` on the source tree before the build is triggered. Yes, git apply on a random directory does work. This feature is meant to only be used to carry local CI compatibility patches if the upstream is not suitable, such as an upstream you do not control but wish to have your CI build anyway.

@@ -1,16 +1,21 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"go.temporal.io/sdk/client"
+
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
+	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 )
 
 type KickoffRequest struct {
@@ -20,29 +25,80 @@ type KickoffRequest struct {
 	ApplyPatch   string `json:"compat-patch"`
 }
 
-func kickoffHandler(w http.ResponseWriter, r *http.Request) {
+type KickoffWrangler struct {
+	temporalClient client.Client
+	overrideFS     fs.FS
+}
+
+func (k *KickoffRequest) merge(k2 KickoffRequest) {
+	if k2.Repository != "" {
+		k.Repository = k2.Repository
+	}
+	if k2.Ref != "" {
+		k.Ref = k2.Ref
+	}
+	if k2.BuildPattern != "" {
+		k.BuildPattern = k2.BuildPattern
+	}
+	if k2.ApplyPatch != "" {
+		k.ApplyPatch = k2.ApplyPatch
+	}
+}
+
+func (k KickoffWrangler) kickoffHandler(w http.ResponseWriter, r *http.Request) {
 	repo := r.PathValue("repo")
 	ref := r.PathValue("ref")
 
-	kick := KickoffRequest{
+	var kick KickoffRequest
+	if r.Body != nil {
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&kick); err != nil {
+			log.Println("[json] failed to decode request body: ", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+	}
+
+	urlParams := KickoffRequest{
 		Repository: repo,
 		Ref:        ref,
 	}
+	kick.merge(urlParams)
 
-	payload, err := json.Marshal(kick)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	// Allow overrides (including changing the whole repository we actually mean if we want to play like that)
+	if k.overrideFS != nil {
+		for _, file := range []string{repo + ".json", fmt.Sprintf("%s.%s.json", repo, ref)} {
+			if data, err := fs.ReadFile(k.overrideFS, file); err == nil {
+				var repoOverride KickoffRequest
+				if err := json.Unmarshal(data, &repoOverride); err == nil {
+					kick.merge(repoOverride)
+				} else {
+					log.Println("[kickoff] failed to parse repo override file: ", file, err)
+				}
+			}
+		}
+	}
+
+	if kick.Repository == "" || kick.Ref == "" {
+		http.Error(w, "invalid request body, no repository or git ref provided", http.StatusBadRequest)
 		return
 	}
 
-	resp, err := http.Post("http://temporal-worker:8081/workflow/start", "application/json", bytes.NewBuffer(payload))
-	if err != nil || resp.StatusCode >= 300 {
+	opts := client.StartWorkflowOptions{
+		TaskQueue: "basic-builder",
+		ID:        fmt.Sprintf("!build! %s %s", kick.Repository, kick.Ref),
+	}
+	_, err := k.temporalClient.ExecuteWorkflow(context.Background(), opts, kick.BuildPattern, kick)
+	if err != nil {
+		log.Println("[temporal] workflow failed: ", err)
 		http.Error(w, "workflow trigger failed", http.StatusBadGateway)
 		return
 	}
 
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("build triggered"))
+	log.Printf("[kickoff] Kicked off %s, %s\n", kick.Repository, kick.Ref)
 }
 
 func main() {
@@ -60,6 +116,16 @@ func main() {
 
 	r.Use(auth.AuthMiddleware)
 
-	r.HandleFunc("KICKOFF /{repo}/{ref}", kickoffHandler)
+	c, err := temporal.EasyClient(temporal.Logger())
+	if err != nil {
+		fmt.Printf("Failed to create Temporal client: %v\n", err)
+		os.Exit(1)
+	}
+	defer c.Close()
+
+	k := KickoffWrangler{temporalClient: c, overrideFS: os.DirFS("./")}
+
+	r.HandleFunc("KICKOFF /{repo}/{ref}", k.kickoffHandler)
+	r.HandleFunc("KICKOFF /", k.kickoffHandler)
 	log.Fatal(http.ListenAndServe(":8083", r))
 }
