@@ -1,18 +1,27 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/sethvargo/go-envconfig"
+
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
+	"github.com/Vaelatern/temporal-cicd/internal/config"
 )
 
 func main() {
-	auth := basicauth.AuthCore{KeyDir: "../keys"}
+	var conf config.Config
+	if err := envconfig.Process(context.Background(), &conf); err != nil {
+		log.Fatal(err)
+	}
+
+	auth := basicauth.AuthCore{KeyDir: conf.Dir.Key}
 	auth.LoadAuth()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGUSR1)
@@ -23,8 +32,8 @@ func main() {
 	}()
 
 	c := synccache{
-		fileroot: "./",
-		keypath:  "../ssh-keys",
+		fileroot: conf.Dir.Cache,
+		keypath:  conf.Dir.SSHKey,
 	}
 
 	r := aerouter.NewRouter()
@@ -38,5 +47,5 @@ func main() {
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	})
-	log.Fatal(http.ListenAndServe(":8081", r))
+	log.Fatal(http.ListenAndServe(conf.Listen, r))
 }

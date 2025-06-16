@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -12,8 +13,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sethvargo/go-envconfig"
+
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
+	"github.com/Vaelatern/temporal-cicd/internal/config"
 )
 
 type artifactstore struct {
@@ -52,7 +56,11 @@ func (a artifactstore) GetArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	auth := basicauth.AuthCore{KeyDir: "../keys"}
+	var conf config.Config
+	if err := envconfig.Process(context.Background(), &conf); err != nil {
+		log.Fatal(err)
+	}
+	auth := basicauth.AuthCore{KeyDir: conf.Dir.Key}
 	auth.LoadAuth()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGUSR1)
@@ -63,7 +71,7 @@ func main() {
 	}()
 
 	a := artifactstore{
-		fileroot: "./",
+		fileroot: conf.Dir.RawArtifact,
 	}
 
 	r := aerouter.NewRouter()
@@ -75,5 +83,5 @@ func main() {
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	})
-	log.Fatal(http.ListenAndServe(":8082", r))
+	log.Fatal(http.ListenAndServe(conf.Listen, r))
 }

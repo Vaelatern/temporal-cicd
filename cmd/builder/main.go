@@ -6,17 +6,21 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
-	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 	"github.com/google/uuid"
+	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
+
+	"github.com/Vaelatern/temporal-cicd/internal/config"
+	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 )
 
 type WorkflowInput struct {
@@ -143,6 +147,11 @@ func UploadActivity(ctx context.Context, repoPath string) (string, error) {
 }
 
 func main() {
+	var conf config.Config
+	if err := envconfig.Process(context.Background(), &conf); err != nil {
+		log.Fatal(err)
+	}
+
 	c, err := temporal.EasyClient(temporal.Logger())
 	if err != nil {
 		fmt.Printf("Failed to create Temporal client: %v\n", err)

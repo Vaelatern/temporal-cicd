@@ -11,10 +11,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
 
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
+	"github.com/Vaelatern/temporal-cicd/internal/config"
 	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 )
 
@@ -102,7 +104,12 @@ func (k KickoffWrangler) kickoffHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func main() {
-	auth := basicauth.AuthCore{KeyDir: "../keys"}
+	var conf config.Config
+	if err := envconfig.Process(context.Background(), &conf); err != nil {
+		log.Fatal(err)
+	}
+
+	auth := basicauth.AuthCore{KeyDir: conf.Dir.Key}
 	auth.LoadAuth()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGUSR1)
@@ -123,9 +130,12 @@ func main() {
 	}
 	defer c.Close()
 
-	k := KickoffWrangler{temporalClient: c, overrideFS: os.DirFS("./")}
+	k := KickoffWrangler{
+		overrideFS:     os.DirFS(conf.Dir.CustomKickoff),
+		temporalClient: c,
+	}
 
 	r.HandleFunc("KICKOFF /{repo}/{ref}", k.kickoffHandler)
 	r.HandleFunc("KICKOFF /", k.kickoffHandler)
-	log.Fatal(http.ListenAndServe(":8083", r))
+	log.Fatal(http.ListenAndServe(conf.Listen, r))
 }

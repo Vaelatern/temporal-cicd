@@ -1,14 +1,16 @@
 module github.com/Vaelatern/temporal-cicd
 
-go 1.24.1
+go 1.24.0
 
 require (
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/google/uuid v1.6.0
 	github.com/leonklingele/securetemp v2.0.1+incompatible
+	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/stretchr/testify v1.10.0
 	github.com/william20111/go-smartsheet v0.0.0-20220926135111-a284c5cca10a
 	go.temporal.io/sdk v1.34.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -50,5 +52,4 @@ require (
 	google.golang.org/grpc v1.66.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
