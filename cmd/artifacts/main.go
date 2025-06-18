@@ -83,5 +83,6 @@ func main() {
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	})
+	log.Printf("[artifacts] Listening on %s\n", conf.Listen)
 	log.Fatal(http.ListenAndServe(conf.Listen, r))
 }

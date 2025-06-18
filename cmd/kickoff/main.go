@@ -137,5 +137,6 @@ func main() {
 
 	r.HandleFunc("KICKOFF /{repo}/{ref}", k.kickoffHandler)
 	r.HandleFunc("KICKOFF /", k.kickoffHandler)
+	log.Printf("[kickoff] Listening on %s\n", conf.Listen)
 	log.Fatal(http.ListenAndServe(conf.Listen, r))
 }
