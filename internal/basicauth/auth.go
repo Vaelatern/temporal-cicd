@@ -76,7 +76,7 @@ func (a *AuthCore) ReloadAuth() {
 
 // NOT REMOTELY CONSTANT TIME
 // Please forgive me. This is just better than fully open.
-func (a AuthCore) Authorize(r *http.Request) bool {
+func (a *AuthCore) Authorize(r *http.Request) bool {
 	a.authMu.RLock()
 	defer a.authMu.RUnlock()
 	token := r.Header.Get("Authorization")
@@ -97,7 +97,7 @@ func (a AuthCore) Authorize(r *http.Request) bool {
 	return false
 }
 
-func (a AuthCore) AuthMiddleware(next http.Handler) http.Handler {
+func (a *AuthCore) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.Authorize(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
