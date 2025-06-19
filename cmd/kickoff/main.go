@@ -119,10 +119,6 @@ func main() {
 		}
 	}()
 
-	r := aerouter.NewRouter()
-
-	r.Use(auth.AuthMiddleware)
-
 	c, err := temporal.EasyClient(temporal.Logger())
 	if err != nil {
 		fmt.Printf("Failed to create Temporal client: %v\n", err)
@@ -135,8 +131,12 @@ func main() {
 		temporalClient: c,
 	}
 
+	r := aerouter.NewRouter()
+	r.Use(auth.AuthMiddleware)
+
 	r.HandleFunc("KICKOFF /{repo}/{ref}", k.kickoffHandler)
 	r.HandleFunc("KICKOFF /", k.kickoffHandler)
+
 	log.Printf("[kickoff] Listening on %s\n", conf.Listen)
 	log.Fatal(http.ListenAndServe(conf.Listen, r))
 }

@@ -1,11 +1,8 @@
 package main
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -24,8 +21,10 @@ import (
 )
 
 type WorkflowInput struct {
-	RepoName string
-	Ref      string
+	Repository   string `json:"repository"`
+	Ref          string `json:"ref"`
+	BuildPattern string `json:"build-pattern"`
+	ApplyPatch   string `json:"compat-patch"`
 }
 
 type WorkflowOutput struct {
@@ -33,10 +32,28 @@ type WorkflowOutput struct {
 	UploadOutput string
 }
 
-func MakeBuildUpload(ctx workflow.Context, input WorkflowInput) (WorkflowOutput, error) {
-	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting MakeBuildUpload", "repo", input.RepoName, "ref", input.Ref)
+type MakeBuilder struct {
+	config config.Config
+}
 
+func (m MakeBuilder) MakeBuildUpload(ctx workflow.Context, input WorkflowInput) (WorkflowOutput, error) {
+	logger := workflow.GetLogger(ctx)
+	logger.Info("Starting MakeBuildUpload", "repo", input.Repository, "ref", input.Ref)
+
+	ao := workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Minute,
+		HeartbeatTimeout:    10 * time.Minute,
+	}
+
+	rawCtx := workflow.WithActivityOptions(ctx, ao)
+
+	err := workflow.ExecuteActivity(rawCtx, "UpdateCache", input).Get(rawCtx, nil)
+	if err != nil {
+		logger.Error("Failed to update cache", "error", err)
+		return WorkflowOutput{}, err
+	}
+
+	// Session Start
 	sessionOptions := &workflow.SessionOptions{
 		ExecutionTimeout: 30 * time.Minute,
 		HeartbeatTimeout: 1 * time.Minute,
@@ -48,31 +65,30 @@ func MakeBuildUpload(ctx workflow.Context, input WorkflowInput) (WorkflowOutput,
 	}
 	defer workflow.CompleteSession(sessionCtx)
 
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute,
-		HeartbeatTimeout:    1 * time.Minute,
-	}
-	sessionCtx = workflow.WithActivityOptions(sessionCtx, ao)
-
-	var cloneOutput string
-	err = workflow.ExecuteActivity(sessionCtx, DownloadFromCacheActivity, input.RepoName, input.Ref).Get(sessionCtx, &cloneOutput)
-	if err != nil {
-		logger.Error("Failed to fetch from cache", "error", err)
-		return WorkflowOutput{}, err
-	}
-
 	var buildOutput string
-	err = workflow.ExecuteActivity(sessionCtx, BuildActivity, cloneOutput).Get(sessionCtx, &buildOutput)
-	if err != nil {
-		logger.Error("Failed to run make build", "error", err)
-		return WorkflowOutput{}, err
-	}
-
 	var uploadOutput string
-	err = workflow.ExecuteActivity(sessionCtx, UploadActivity, cloneOutput).Get(sessionCtx, &uploadOutput)
-	if err != nil {
-		logger.Error("Failed to run make upload", "error", err)
-		return WorkflowOutput{}, err
+	{
+
+		sessionCtx = workflow.WithActivityOptions(sessionCtx, ao)
+
+		var cloneOutput string
+		err = workflow.ExecuteActivity(sessionCtx, "DownloadFromCacheActivity", input).Get(sessionCtx, &cloneOutput)
+		if err != nil {
+			logger.Error("Failed to fetch from cache", "error", err)
+			return WorkflowOutput{}, err
+		}
+
+		err = workflow.ExecuteActivity(sessionCtx, "BuildActivity", cloneOutput).Get(sessionCtx, &buildOutput)
+		if err != nil {
+			logger.Error("Failed to run make build", "error", err)
+			return WorkflowOutput{}, err
+		}
+
+		err = workflow.ExecuteActivity(sessionCtx, "UploadActivity", cloneOutput).Get(sessionCtx, &uploadOutput)
+		if err != nil {
+			logger.Error("Failed to run make upload", "error", err)
+			return WorkflowOutput{}, err
+		}
 	}
 
 	return WorkflowOutput{
@@ -81,7 +97,30 @@ func MakeBuildUpload(ctx workflow.Context, input WorkflowInput) (WorkflowOutput,
 	}, nil
 }
 
-func DownloadFromCacheActivity(ctx context.Context, repo, ref string) (string, error) {
+func (m MakeBuilder) UpdateCache(ctx context.Context, args WorkflowInput) error {
+	repo := args.Repository
+	ref := args.Ref
+	logger := activity.GetLogger(ctx)
+	logger.Info("Triggering cache", "repo", repo, "ref", ref)
+
+	tarballURL := fmt.Sprintf("%s/sync/%s/%s", m.config.CacheURL, repo, ref)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", tarballURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer a")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to trigger cache: %w", err)
+	}
+	return resp.Body.Close()
+}
+
+func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args WorkflowInput) (string, error) {
+	repo := args.Repository
+	ref := args.Ref
 	logger := activity.GetLogger(ctx)
 	logger.Info("Downloading tarball from cache", "repo", repo, "ref", ref)
 
@@ -90,56 +129,40 @@ func DownloadFromCacheActivity(ctx context.Context, repo, ref string) (string, e
 		return "", err
 	}
 
-	tarballURL := fmt.Sprintf("http://cache:8080/download/%s/%s.tar.gz", repo, ref)
-	resp, err := http.Get(tarballURL)
+	tarballURL := fmt.Sprintf("%s/download/%s/%s", m.config.CacheURL, repo, ref)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", tarballURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer a")
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to download tarball: %w", err)
 	}
 	defer resp.Body.Close()
 
-	gz, err := gzip.NewReader(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	tr := tar.NewReader(gz)
-
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
-		path := filepath.Join(tmpDir, hdr.Name)
-		if hdr.Typeflag == tar.TypeDir {
-			os.MkdirAll(path, 0755)
-		} else {
-			os.MkdirAll(filepath.Dir(path), 0755)
-			f, err := os.Create(path)
-			if err != nil {
-				return "", err
-			}
-			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
-				return "", err
-			}
-			f.Close()
-		}
+	cmd := exec.CommandContext(ctx, "tar", "-xz", "-C", tmpDir)
+	cmd.Stdin = resp.Body
+	logger.Info("Starting process")
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("Failed to start tar command: %v\n", err)
 	}
 
+	cmd.Wait()
 	logger.Info("Tarball extracted", "path", tmpDir)
 	return tmpDir, nil
 }
 
-func BuildActivity(ctx context.Context, repoPath string) (string, error) {
+func (m MakeBuilder) BuildActivity(ctx context.Context, repoPath string) (string, error) {
 	cmd := exec.CommandContext(ctx, "make", "build")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
 
-func UploadActivity(ctx context.Context, repoPath string) (string, error) {
+func (m MakeBuilder) UploadActivity(ctx context.Context, repoPath string) (string, error) {
 	cmd := exec.CommandContext(ctx, "make", "upload")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
@@ -163,10 +186,15 @@ func main() {
 		EnableSessionWorker: true,
 	})
 
-	w.RegisterWorkflow(MakeBuildUpload)
-	w.RegisterActivity(DownloadFromCacheActivity)
-	w.RegisterActivity(BuildActivity)
-	w.RegisterActivity(UploadActivity)
+	m := MakeBuilder{
+		config: conf,
+	}
+
+	w.RegisterWorkflow(m.MakeBuildUpload)
+	w.RegisterActivity(m.UpdateCache)
+	w.RegisterActivity(m.DownloadFromCacheActivity)
+	w.RegisterActivity(m.BuildActivity)
+	w.RegisterActivity(m.UploadActivity)
 
 	err = w.Run(worker.InterruptCh())
 	if err != nil {

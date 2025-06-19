@@ -172,7 +172,7 @@ func (s synccache) GetTarball(w http.ResponseWriter, r *http.Request) {
 	ref := r.PathValue("ref")
 
 	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s-%s.tar.gz", repo, ref))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s-%s.tgz", repo, ref))
 
 	repoPath := filepath.Join(s.fileroot, repo)
 

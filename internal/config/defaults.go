@@ -10,6 +10,6 @@ type Dir struct {
 
 type Config struct {
 	Dir      Dir
-	CacheURL string
+	CacheURL string `env:"TCD_CACHE_URL, default=http://localhost:8080"`
 	Listen   string `env:"TCD_BIND, default=:8080"`
 }
