@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/go-extract"
 	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/worker"
@@ -143,14 +144,10 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 	}
 	defer resp.Body.Close()
 
-	cmd := exec.CommandContext(ctx, "tar", "-xz", "-C", tmpDir)
-	cmd.Stdin = resp.Body
-	logger.Info("Starting process")
-	if err := cmd.Start(); err != nil {
+	if err := extract.Unpack(ctx, tmpDir, resp.Body, extract.NewConfig()); err != nil {
 		return "", fmt.Errorf("Failed to start tar command: %v\n", err)
 	}
 
-	cmd.Wait()
 	logger.Info("Tarball extracted", "path", tmpDir)
 	return tmpDir, nil
 }
