@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Gitolite hook for repository creation
+# This hook registers a new repository with the Cache service
+
+# Configuration
+CACHE_BASE_URL="${LRCICD_CACHE_URL:-http://gitolite-cache:8081}"
+REGISTER_TOKEN="$LRCICD_REGISTER_TOKEN"
+REPO_NAME="$1"
+
+# Exit if required variables are missing
+if [ -z "$REPO_NAME" ]; then
+    echo "Error: Repository name required"
+    exit 1
+fi
+
+if [ -z "$REGISTER_TOKEN" ]; then
+    echo "Error: LRCICD_REGISTER_TOKEN environment variable required"
+    exit 1
+fi
+
+# Generate SSH key pair for this repository
+SSH_KEY_DIR="$HOME/.ssh/gitolite-hooks"
+mkdir -p "$SSH_KEY_DIR"
+
+KEY_NAME="$REPO_NAME-$(date +%s)"
+PRIVATE_KEY="$SSH_KEY_DIR/$KEY_NAME"
+PUBLIC_KEY="$SSH_KEY_DIR/$KEY_NAME.pub"
+
+# Generate SSH key pair
+ssh-keygen -t rsa -b 2048 -f "$PRIVATE_KEY" -N "" -C "gitolite-hook-$REPO_NAME" >/dev/null 2>&1
+
+# Read the private key
+SSH_PRIVATE_KEY=$(cat "$PRIVATE_KEY")
+
+# Construct the git URL (assuming gitolite standard format)
+GIT_URL="git@gitolite:$REPO_NAME.git"
+
+# Register repository with Cache service
+echo "Registering repository $REPO_NAME with Cache service..."
+
+RESPONSE=$(curl -s -w "\n%{http_code}" \
+    -H "Authorization: Bearer $REGISTER_TOKEN" \
+    -H "Content-Type: application/json" \
+    -X PUT \
+    "$CACHE_BASE_URL/sync/$REPO_NAME" \
+    -d "{\"url\": \"$GIT_URL\", \"ssh-reading-private-key\": \"$SSH_PRIVATE_KEY\"}")
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+
+if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 201 ]; then
+    echo "Repository $REPO_NAME successfully registered with Cache service"
+    
+    # Generate auth token for subsequent CI/CD operations
+    # This token will be stored in git metadata for the post-receive hook
+    CI_TOKEN=$(openssl rand -hex 32)
+    
+    # Store the CI token in git config for later use by post-receive hook
+    git config --local "vaelci.ci-token" "$CI_TOKEN"
+    
+    echo "Generated CI token for repository: $CI_TOKEN"
+    echo "This token will be used by the post-receive hook for CI/CD operations"
+    
+    # Clean up the temporary SSH key files
+    rm -f "$PRIVATE_KEY" "$PUBLIC_KEY"
+    
+    exit 0
+else
+    echo "Error registering repository with Cache service:"
+    echo "HTTP $HTTP_CODE: $RESPONSE_BODY"
+    rm -f "$PRIVATE_KEY" "$PUBLIC_KEY"
+    exit 1
+fi

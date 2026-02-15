@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Gitolite post-receive hook for CI/CD integration
+# This hook triggers CI/CD workflows when code is pushed
+
+# Configuration
+KICKOFF_BASE_URL="${LRCICD_KICKOFF_URL:-http://gitolite-kickoff:8083}"
+
+# Get the repository name from the git directory
+REPO_NAME=$(basename "$(pwd)" .git)
+
+# Get the current branch/ref that was pushed
+while read oldrev newrev refname; do
+    # Skip if this is a branch deletion
+    if [ "$newrev" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+    
+    # Extract branch name from full ref (e.g., refs/heads/main -> main)
+    BRANCH_NAME=$(echo "$refname" | sed 's|refs/heads/||')
+    
+    # Skip if not a branch (e.g., tags)
+    if [ "$BRANCH_NAME" = "$refname" ]; then
+        continue
+    fi
+    
+    echo "Processing push to branch: $BRANCH_NAME"
+    
+    # Retrieve the CI token from git config (stored by repo-creation-hook)
+    CI_TOKEN=$(git config --get "vaelci.ci-token")
+    
+    if [ -z "$CI_TOKEN" ]; then
+        echo "Warning: No CI token found in repository metadata. Skipping CI/CD trigger."
+        continue
+    fi
+    
+    # Check for .vaelci.json in the repository
+    # We need to checkout the files temporarily to read the config
+    TEMP_DIR=$(mktemp -d)
+    git archive "$newrev" | tar -x -C "$TEMP_DIR"
+    
+    VAELCI_CONFIG="$TEMP_DIR/.vaelci.json"
+    
+    if [ ! -f "$VAELCI_CONFIG" ]; then
+        echo "No .vaelci.json found in repository. Skipping CI/CD trigger."
+        rm -rf "$TEMP_DIR"
+        continue
+    fi
+    
+    echo "Found .vaelci.json, triggering CI/CD workflow..."
+    
+    # Read the .vaelci.json content
+    VAELCI_CONTENT=$(cat "$VAELCI_CONFIG")
+    
+    # Prepare the kickoff request body
+    # Merge the .vaelci.json content with required repository and ref information
+    KICKOFF_DATA=$(jq -n \
+        --arg repo "$REPO_NAME" \
+        --arg ref "$BRANCH_NAME" \
+        --argjson config "$VAELCI_CONTENT" \
+        '$config + {"repository": $repo, "ref": $ref}' <<< "$VAELCI_CONTENT")
+    
+    # Call the KICKOFF endpoint
+    echo "Triggering CI/CD for $REPO_NAME@$BRANCH_NAME..."
+    
+    RESPONSE=$(curl -s -w "\n%{http_code}" \
+        -H "Authorization: Bearer $CI_TOKEN" \
+        -H "Content-Type: application/json" \
+        -X KICKOFF \
+        "$KICKOFF_BASE_URL/$REPO_NAME/$BRANCH_NAME" \
+        -d "$KICKOFF_DATA")
+    
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+    RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+    
+    if [ "$HTTP_CODE" -eq 202 ]; then
+        echo "CI/CD workflow successfully triggered for $REPO_NAME@$BRANCH_NAME"
+        echo "Response: $RESPONSE_BODY"
+    else
+        echo "Error triggering CI/CD workflow:"
+        echo "HTTP $HTTP_CODE: $RESPONSE_BODY"
+    fi
+    
+    # Clean up temporary directory
+    rm -rf "$TEMP_DIR"
+    
+done < /dev/stdin
+
+echo "Post-receive hook completed."

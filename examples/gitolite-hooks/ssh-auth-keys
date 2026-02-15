@@ -1,0 +1,206 @@
+#!/bin/bash
+
+# Custom SSH authentication script for gitolite
+# This script manages SSH keys stored in per-repository git configuration
+# Usage: ssh-auth-keys <command> [args...]
+
+SCRIPT_NAME="ssh-auth-keys"
+GITOLITE_REPO_BASE="${GITOLITE_REPO_BASE:-$HOME/repositories}"
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $SCRIPT_NAME <command> [args...]"
+    echo "Commands:"
+    echo "  register <repo> <key-id> <public-key>  Register an SSH key for a repository"
+    echo "  unregister <repo> <key-id>             Remove an SSH key for a repository"
+    echo "  list <repo>                             List all SSH keys for a repository"
+    echo "  auth <repo> <key-id>                    Check if a key is authorized for a repository"
+    echo "  update-authorized-keys                  Update the global authorized_keys file"
+    echo ""
+}
+
+# Function to register a key
+register_key() {
+    local repo="$1"
+    local key_id="$2"
+    local public_key="$3"
+    
+    if [ -z "$repo" ] || [ -z "$key_id" ] || [ -z "$public_key" ]; then
+        echo "Error: repo, key-id, and public-key required for registration"
+        return 1
+    fi
+    
+    local repo_path="$GITOLITE_REPO_BASE/$repo.git"
+    
+    if [ ! -d "$repo_path" ]; then
+        echo "Error: Repository $repo not found"
+        return 1
+    fi
+    
+    cd "$repo_path"
+    
+    # Store the key in git config
+    git config "vaelci.ssh-key.$key_id" "$public_key"
+    
+    # Also store metadata
+    git config "vaelci.ssh-key.$key_id.created" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    git config "vaelci.ssh-key.$key_id.source" "temporalio-cicd"
+    
+    echo "SSH key $key_id registered for repository $repo"
+    
+    # Update the global authorized_keys
+    update_authorized_keys
+    
+    return 0
+}
+
+# Function to unregister a key
+unregister_key() {
+    local repo="$1"
+    local key_id="$2"
+    
+    if [ -z "$repo" ] || [ -z "$key_id" ]; then
+        echo "Error: repo and key-id required for unregistration"
+        return 1
+    fi
+    
+    local repo_path="$GITOLITE_REPO_BASE/$repo.git"
+    
+    if [ ! -d "$repo_path" ]; then
+        echo "Error: Repository $repo not found"
+        return 1
+    fi
+    
+    cd "$repo_path"
+    
+    # Remove the key from git config
+    git config --unset "vaelci.ssh-key.$key_id" 2>/dev/null
+    git config --unset "vaelci.ssh-key.$key_id.created" 2>/dev/null
+    git config --unset "vaelci.ssh-key.$key_id.source" 2>/dev/null
+    
+    echo "SSH key $key_id unregistered for repository $repo"
+    
+    # Update the global authorized_keys
+    update_authorized_keys
+    
+    return 0
+}
+
+# Function to list keys for a repository
+list_keys() {
+    local repo="$1"
+    
+    if [ -z "$repo" ]; then
+        echo "Error: repo required for listing keys"
+        return 1
+    fi
+    
+    local repo_path="$GITOLITE_REPO_BASE/$repo.git"
+    
+    if [ ! -d "$repo_path" ]; then
+        echo "Error: Repository $repo not found"
+        return 1
+    fi
+    
+    cd "$repo_path"
+    
+    echo "SSH keys for repository $repo:"
+    git config --get-regexp "^vaelci\.ssh-key\." | grep -v "\.created\|\.source" | while read config_key public_key; do
+        key_id=$(echo "$config_key" | sed 's/vaelci\.ssh-key\.//')
+        created=$(git config "vaelci.ssh-key.$key_id.created" || echo "unknown")
+        source=$(git config "vaelci.ssh-key.$key_id.source" || echo "unknown")
+        echo "  $key_id (created: $created, source: $source)"
+        echo "    $public_key"
+    done
+    
+    return 0
+}
+
+# Function to check if a key is authorized
+auth_check() {
+    local repo="$1"
+    local key_id="$2"
+    
+    if [ -z "$repo" ] || [ -z "$key_id" ]; then
+        echo "Error: repo and key-id required for auth check"
+        return 1
+    fi
+    
+    local repo_path="$GITOLITE_REPO_BASE/$repo.git"
+    
+    if [ ! -d "$repo_path" ]; then
+        echo "Error: Repository $repo not found"
+        return 1
+    fi
+    
+    cd "$repo_path"
+    
+    local public_key=$(git config "vaelci.ssh-key.$key_id")
+    
+    if [ -n "$public_key" ]; then
+        echo "AUTHORIZED: Key $key_id is authorized for repository $repo"
+        return 0
+    else
+        echo "DENIED: Key $key_id not found for repository $repo"
+        return 1
+    fi
+}
+
+# Function to update the global authorized_keys file
+update_authorized_keys() {
+    local authorized_keys_file="$HOME/.ssh/authorized_keys"
+    local temp_keys="/tmp/authorized_keys.$$"
+    
+    # Start with a backup of any existing non-managed keys
+    if [ -f "$authorized_keys_file" ]; then
+        grep -v "^#.*temporalio-cicd-managed" "$authorized_keys_file" > "$temp_keys"
+    else
+        touch "$temp_keys"
+    fi
+    
+    # Add managed keys header
+    echo "# temporalio-cicd-managed SSH keys (auto-generated)" >> "$temp_keys"
+    
+    # Find all repositories and add their SSH keys
+    find "$GITOLITE_REPO_BASE" -name "*.git" -type d | while read repo_path; do
+        if [ -d "$repo_path" ]; then
+            cd "$repo_path"
+            repo_name=$(basename "$repo_path" .git)
+            
+            git config --get-regexp "^vaelci\.ssh-key\." | grep -v "\.created\|\.source" | while read config_key public_key; do
+                key_id=$(echo "$config_key" | sed 's/vaelci\.ssh-key\.//')
+                echo "# Key $key_id for repository $repo_name" >> "$temp_keys"
+                echo "command=\"$SCRIPT_NAME auth $repo_name $key_id\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $public_key" >> "$temp_keys"
+            done
+        fi
+    done
+    
+    # Replace the authorized_keys file
+    mv "$temp_keys" "$authorized_keys_file"
+    chmod 600 "$authorized_keys_file"
+    
+    echo "Updated authorized_keys file with $(grep -c '^ssh-\|ecdsa-\|ed25519-' "$authorized_keys_file") keys"
+}
+
+# Main command dispatcher
+case "$1" in
+    register)
+        register_key "$2" "$3" "$4"
+        ;;
+    unregister)
+        unregister_key "$2" "$3"
+        ;;
+    list)
+        list_keys "$2"
+        ;;
+    auth)
+        auth_check "$2" "$3"
+        ;;
+    update-authorized-keys)
+        update_authorized_keys
+        ;;
+    *)
+        show_usage
+        exit 1
+        ;;
+esac

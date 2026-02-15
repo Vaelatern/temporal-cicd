@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# Alternative SSH key management using gitolite's per-repository configuration
+# This approach stores SSH keys in per-repository git config instead of gitolite-admin
+
+# Configuration
+CACHE_BASE_URL="${LRCICD_CACHE_URL:-http://gitolite-cache:8081}"
+REGISTER_TOKEN="$LRCICD_REGISTER_TOKEN"
+REPO_NAME="$1"
+SSH_AUTH_COMMAND="${SSH_AUTH_COMMAND:-/usr/local/libexec/gitolite/ssh-auth-keys}"
+
+# Exit if required variables are missing
+if [ -z "$REPO_NAME" ]; then
+    echo "Error: Repository name required"
+    exit 1
+fi
+
+if [ -z "$REGISTER_TOKEN" ]; then
+    echo "Error: LRCICD_REGISTER_TOKEN environment variable required"
+    exit 1
+fi
+
+# Generate SSH key pair for this repository
+SSH_KEY_DIR="$HOME/.ssh/gitolite-ci"
+mkdir -p "$SSH_KEY_DIR"
+
+KEY_NAME="ci-$REPO_NAME-$(date +%s)"
+PRIVATE_KEY="$SSH_KEY_DIR/$KEY_NAME"
+PUBLIC_KEY="$SSH_KEY_DIR/$KEY_NAME.pub"
+
+# Generate SSH key pair
+ssh-keygen -t rsa -b 2048 -f "$PRIVATE_KEY" -N "" -C "ci-user-$REPO_NAME" >/dev/null 2>&1
+
+# Read the keys
+SSH_PRIVATE_KEY=$(cat "$PRIVATE_KEY")
+SSH_PUBLIC_KEY=$(cat "$PUBLIC_KEY")
+
+# Generate a unique key identifier
+KEY_ID="ci-$REPO_NAME-$(openssl rand -hex 8)"
+
+# Store the SSH public key in the repository's git config
+# This allows retrieval by the ssh-auth-keys script
+git config --local "vaelci.ssh-public-key" "$SSH_PUBLIC_KEY"
+git config --local "vaelci.ssh-key-id" "$KEY_ID"
+
+# Store the private key location for the Cache service
+git config --local "vaelci.ssh-private-key-path" "$PRIVATE_KEY"
+
+echo "Generated SSH key pair for repository $REPO_NAME"
+echo "Key ID: $KEY_ID"
+
+# Step 1: Register repository with Cache service
+echo "Registering repository $REPO_NAME with Cache service..."
+
+# Construct the git URL (using the gitolite standard format)
+GIT_URL="git@gitolite:$REPO_NAME.git"
+
+RESPONSE=$(curl -s -w "\n%{http_code}" \
+    -H "Authorization: Bearer $REGISTER_TOKEN" \
+    -H "Content-Type: application/json" \
+    -X PUT \
+    "$CACHE_BASE_URL/sync/$REPO_NAME" \
+    -d "{\"url\": \"$GIT_URL\", \"ssh-reading-private-key\": \"$SSH_PRIVATE_KEY\"}")
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+
+if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 201 ]; then
+    echo "Repository $REPO_NAME successfully registered with Cache service"
+    
+    # Generate auth token for subsequent CI/CD operations
+    CI_TOKEN=$(openssl rand -hex 32)
+    
+    # Store all CI-related information in git config
+    git config --local "vaelci.ci-token" "$CI_TOKEN"
+    git config --local "vaelci.ci-key-id" "$KEY_ID"
+    
+    echo "Generated CI token for repository: $CI_TOKEN"
+    echo "SSH Key ID: $KEY_ID"
+    echo "CI information stored in repository metadata"
+    
+    # Step 2: If ssh-auth-keys script exists, register the key immediately
+    if [ -x "$SSH_AUTH_COMMAND" ]; then
+        echo "Registering SSH key with custom auth system..."
+        "$SSH_AUTH_COMMAND" register "$REPO_NAME" "$KEY_ID" "$SSH_PUBLIC_KEY"
+        if [ $? -eq 0 ]; then
+            echo "SSH key successfully registered with auth system"
+        else
+            echo "Warning: Failed to register SSH key with auth system"
+        fi
+    else
+        echo "Info: No custom ssh-auth-keys script found at $SSH_AUTH_COMMAND"
+        echo "SSH keys are stored in repository metadata and will be available to custom scripts"
+    fi
+    
+    # Clean up the temporary private key file (it's now stored in git config)
+    # Keep the public key for potential reference
+    rm -f "$PRIVATE_KEY"
+    
+    exit 0
+else
+    echo "Error registering repository with Cache service:"
+    echo "HTTP $HTTP_CODE: $RESPONSE_BODY"
+    rm -f "$PRIVATE_KEY" "$PUBLIC_KEY"
+    exit 1
+fi
