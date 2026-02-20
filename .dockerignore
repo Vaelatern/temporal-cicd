@@ -4,3 +4,6 @@
 /builder
 /kickoff
 /working-structure
+/Dockerfile.*
+/*.sh
+/*.nomad
