@@ -22,7 +22,7 @@ job "temporal-cicd" {
       driver = "docker"
 
       config {
-        image = "ghcr.io/vaelatern/lrcicd/kickoff:master"
+        image = "ghcr.io/vaelatern/temporal-cicd/kickoff:master"
         ports = ["http"]
         volumes = ["custom-kickoff:/custom-kickoff",
         "keys.d:/keys"]
@@ -67,7 +67,7 @@ EOF
       driver = "docker"
 
       config {
-        image   = "ghcr.io/vaelatern/lrcicd/cache:master"
+        image   = "ghcr.io/vaelatern/temporal-cicd/cache:master"
         ports   = ["http"]
         volumes = ["repos:/repos", "ssh-keys:/ssh-keys", "keys.d:/keys"]
       }
@@ -111,7 +111,7 @@ EOF
       driver = "docker"
 
       config {
-        image   = "ghcr.io/vaelatern/lrcicd/artifacts:master"
+        image   = "ghcr.io/vaelatern/temporal-cicd/artifacts:master"
         ports   = ["http"]
         volumes = ["artifacts:/artifacts", "keys.d:/keys"]
       }
@@ -147,7 +147,7 @@ EOF
       driver = "docker"
 
       config {
-        image = "ghcr.io/vaelatern/lrcicd/builder:master"
+        image = "ghcr.io/vaelatern/temporal-cicd/builder:master"
       }
 
       env {
