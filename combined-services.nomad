@@ -1,3 +1,4 @@
+#!/usr/bin/env -S nomad job run
 job "temporal-cicd" {
   datacenters = ["dc1"]
   type        = "service"
@@ -7,11 +8,13 @@ job "temporal-cicd" {
 
     network {
       mode = "bridge"
-      port "http" {}
+      port "http" {
+	to = 8080
+      }
     }
 
     service {
-      name = "kickoff"
+      provider="nomad"
       port = "http"
     }
 
@@ -19,16 +22,16 @@ job "temporal-cicd" {
       driver = "docker"
 
       config {
-        image        = "temporal-cicd-kickoff:2026-02-25"
-        ports        = ["http"]
-	volumes      = ["custom-kickoff:/custom-kickoff",
-	                "keys.d:/keys.d"]
+        image = "ghcr.io/vaelatern/lrcicd/kickoff:master"
+        ports = ["http"]
+        volumes = ["custom-kickoff:/custom-kickoff",
+        "keys.d:/keys"]
       }
 
       template {
-        change_mode = "signal"
+        change_mode   = "signal"
         change_signal = "SIGUSR1"
-        data        = <<EOF
+        data          = <<EOF
 {{ range nomadVarList "temporal-cicd/keys-d" }}
 # {{ .Path }}
 {{ with nomadVar .Path }}
@@ -36,11 +39,11 @@ job "temporal-cicd" {
 {{ end }}
 {{ end }}
 EOF
-        destination = "keys.d/nomad-secret-keys"
+        destination   = "keys.d/nomad-secret-keys.yml"
       }
 
       env {
-        TEMPORAL_ADDRESS="172.17.0.1:7233"
+        TEMPORAL_ADDRESS = "172.17.0.1:7233"
       }
     }
   }
@@ -51,12 +54,12 @@ EOF
     network {
       mode = "bridge"
       port "http" {
-        static = 8081
+	to = 8080
       }
     }
 
     service {
-      name = "cache"
+      provider="nomad"
       port = "http"
     }
 
@@ -64,15 +67,15 @@ EOF
       driver = "docker"
 
       config {
-        image   = "temporal-cicd-cache:2026-02-25"
+        image   = "ghcr.io/vaelatern/lrcicd/cache:master"
         ports   = ["http"]
-        volumes = ["repos:/repos", "ssh-keys:/ssh-keys", "keys.d:/keys.d"]
+        volumes = ["repos:/repos", "ssh-keys:/ssh-keys", "keys.d:/keys"]
       }
 
       template {
-        change_mode = "signal"
+        change_mode   = "signal"
         change_signal = "SIGUSR1"
-        data        = <<EOF
+        data          = <<EOF
 {{ range nomadVarList "temporal-cicd/keys-d" }}
 # {{ .Path }}
 {{ with nomadVar .Path }}
@@ -80,11 +83,11 @@ EOF
 {{ end }}
 {{ end }}
 EOF
-        destination = "keys.d/nomad-secret-keys"
+        destination   = "keys.d/nomad-secret-keys.yml"
       }
 
       env {
-        TEMPORAL_ADDRESS="172.17.0.1:7233"
+        TEMPORAL_ADDRESS = "172.17.0.1:7233"
       }
     }
   }
@@ -94,11 +97,13 @@ EOF
 
     network {
       mode = "bridge"
-      port "http" {}
+      port "http" {
+	to = 8080
+      }
     }
 
     service {
-      name = "artifacts"
+      provider="nomad"
       port = "http"
     }
 
@@ -106,15 +111,15 @@ EOF
       driver = "docker"
 
       config {
-        image   = "temporal-cicd-artifacts:2026-02-25"
+        image   = "ghcr.io/vaelatern/lrcicd/artifacts:master"
         ports   = ["http"]
-        volumes = ["artifacts:/artifacts", "keys.d:/keys.d"]
+        volumes = ["artifacts:/artifacts", "keys.d:/keys"]
       }
 
       template {
-        change_mode = "signal"
+        change_mode   = "signal"
         change_signal = "SIGUSR1"
-        data        = <<EOF
+        data          = <<EOF
 {{ range nomadVarList "temporal-cicd/keys-d" }}
 # {{ .Path }}
 {{ with nomadVar .Path }}
@@ -122,11 +127,11 @@ EOF
 {{ end }}
 {{ end }}
 EOF
-        destination = "keys.d/nomad-secret-keys"
+        destination   = "keys.d/nomad-secret-keys.yml"
       }
 
       env {
-        TEMPORAL_ADDRESS="172.17.0.1:7233"
+        TEMPORAL_ADDRESS = "172.17.0.1:7233"
       }
     }
   }
@@ -142,11 +147,11 @@ EOF
       driver = "docker"
 
       config {
-        image   = "temporal-cicd-builder:2026-02-25"
+        image = "ghcr.io/vaelatern/lrcicd/builder:master"
       }
 
       env {
-        TEMPORAL_ADDRESS="172.17.0.1:7233"
+        TEMPORAL_ADDRESS = "172.17.0.1:7233"
       }
     }
   }
