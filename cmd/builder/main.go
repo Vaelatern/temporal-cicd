@@ -41,11 +41,17 @@ func main() {
 		config: conf,
 	}
 
+	g := GenericBuilder{
+		config: conf,
+	}
+
 	w.RegisterWorkflow(m.MakeBuildUpload)
 	w.RegisterActivity(m.UpdateCache)
 	w.RegisterActivity(m.DownloadFromCacheActivity)
 	w.RegisterActivity(m.BuildActivity)
 	w.RegisterActivity(m.UploadActivity)
+	w.RegisterWorkflow(g.GenericVaelCiCdStart)
+	w.RegisterActivity(g.DetermineSpecificBuildFlow)
 
 	err = w.Run(worker.InterruptCh())
 	if err != nil {
