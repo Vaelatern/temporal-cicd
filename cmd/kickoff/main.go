@@ -52,7 +52,7 @@ func (k KickoffWrangler) kickoffHandler(w http.ResponseWriter, r *http.Request) 
 	ref := r.PathValue("ref")
 
 	var kick KickoffRequest
-	if r.Body != nil {
+	if r.Body != nil && r.ContentLength > 0 {
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&kick); err != nil {
 			log.Println("[json] failed to decode request body: ", err)
@@ -85,6 +85,9 @@ func (k KickoffWrangler) kickoffHandler(w http.ResponseWriter, r *http.Request) 
 	if kick.Repository == "" || kick.Ref == "" {
 		http.Error(w, "invalid request body, no repository or git ref provided", http.StatusBadRequest)
 		return
+	}
+	if kick.BuildPattern == "" {
+		kick.BuildPattern = "GenericVaelCiCdStart"
 	}
 
 	opts := client.StartWorkflowOptions{
