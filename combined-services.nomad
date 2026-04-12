@@ -153,6 +153,14 @@ EOF
       env {
         TEMPORAL_ADDRESS = "172.17.0.1:7233"
       }
+
+      template {
+	env = true
+        data        = <<EOF
+CACHE_ADDR="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "temporal-cicd-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
+EOF
+        destination = "service-discovery.env"
+      }
     }
   }
 }
