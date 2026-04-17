@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,11 +14,12 @@ import (
 
 	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
+	temporal_envconfig "go.temporal.io/sdk/contrib/envconfig"
+	temporal_log "go.temporal.io/sdk/log"
 
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
 	"github.com/Vaelatern/temporal-cicd/internal/config"
-	"github.com/Vaelatern/temporal-cicd/internal/temporal"
 )
 
 type KickoffRequest struct {
@@ -106,6 +108,13 @@ func (k KickoffWrangler) kickoffHandler(w http.ResponseWriter, r *http.Request) 
 	log.Printf("[kickoff] Kicked off %s, %s\n", kick.Repository, kick.Ref)
 }
 
+func logger() temporal_log.Logger {
+	return temporal_log.NewStructuredLogger(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	})))
+}
+
 func main() {
 	var conf config.Config
 	if err := envconfig.Process(context.Background(), &conf); err != nil {
@@ -122,7 +131,9 @@ func main() {
 		}
 	}()
 
-	c, err := temporal.EasyClient(temporal.Logger())
+	opts := temporal_envconfig.MustLoadDefaultClientOptions()
+	opts.Logger = logger()
+	c, err := client.Dial(opts)
 	if err != nil {
 		fmt.Printf("Failed to create Temporal client: %v\n", err)
 		os.Exit(1)
