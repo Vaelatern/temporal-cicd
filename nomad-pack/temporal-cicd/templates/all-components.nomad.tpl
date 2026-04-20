@@ -20,7 +20,7 @@ EOF
       template {
 	env  = true
         data = <<EOF
-[[ dig "hookups" "temporal" "{{ range nomadService 1 (env \"NOMAD_ALLOC_ID\") \"temporal-frontend\" }}{{ .Address }}:{{ .Port }}{{ end }}" .Args ]]
+TEMPORAL_ADDRESS="[[ dig "hookups" "temporal" "{{ range nomadService 1 (env \"NOMAD_ALLOC_ID\") \"temporal-frontend\" }}{{ .Address }}:{{ .Port }}{{ end }}" .Args ]]"
 EOF
         destination   = "local/env/temporal-frontend"
       }
