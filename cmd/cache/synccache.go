@@ -137,12 +137,7 @@ func (s synccache) AdjustRef(w http.ResponseWriter, r *http.Request) {
 	hashBytes := hasher.Sum(nil)
 	hashString := hex.EncodeToString(hashBytes)
 
-	absPath, err := filepath.Abs(s.keypath)
-	if err != nil {
-		http.Error(w, "failed to get ssh key abspath - bad configuration: "+err.Error(), 500)
-		return
-	}
-	sshKeyPath := filepath.Join(absPath, hashString)
+	sshKeyPath := filepath.Join(s.keypath, hashString)
 	if _, err := os.Stat(sshKeyPath); os.IsNotExist(err) {
 		err = ioutil.WriteFile(sshKeyPath, []byte(req.SSHReadingPrivateKey), 0600)
 		if err != nil {
