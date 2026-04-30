@@ -80,7 +80,11 @@ func (s synccache) NewRef(w http.ResponseWriter, r *http.Request) {
 
 	sshKeyPath := filepath.Join(s.keypath, hashString)
 	if _, err := os.Stat(sshKeyPath); os.IsNotExist(err) {
-		err = ioutil.WriteFile(sshKeyPath, []byte(req.SSHReadingPrivateKey), 0600)
+		keyContent := req.SSHReadingPrivateKey
+		if !strings.HasSuffix(keyContent, "\n") {
+			keyContent += "\n"
+		}
+		err = ioutil.WriteFile(sshKeyPath, []byte(keyContent), 0600)
 		if err != nil {
 			http.Error(w, "failed to write ssh key", 500)
 			return
@@ -139,7 +143,11 @@ func (s synccache) AdjustRef(w http.ResponseWriter, r *http.Request) {
 
 	sshKeyPath := filepath.Join(s.keypath, hashString)
 	if _, err := os.Stat(sshKeyPath); os.IsNotExist(err) {
-		err = ioutil.WriteFile(sshKeyPath, []byte(req.SSHReadingPrivateKey), 0600)
+		keyContent := req.SSHReadingPrivateKey
+		if !strings.HasSuffix(keyContent, "\n") {
+			keyContent += "\n"
+		}
+		err = ioutil.WriteFile(sshKeyPath, []byte(keyContent), 0600)
 		if err != nil {
 			http.Error(w, "failed to write ssh key", 500)
 			return
