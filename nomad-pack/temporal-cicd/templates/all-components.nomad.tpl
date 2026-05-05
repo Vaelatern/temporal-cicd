@@ -140,8 +140,8 @@ job [[ getarg "jobname" .Args ]] {
       template {
 	env = true
         data        = <<EOF
-CACHE_ADDR="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
-ARTIFACTS_ADDR="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-artifacts" }}{{ .Address }}:{{ .Port }}{{ end }}"
+TCD_CACHE_URL="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
+TCD_ARTIFACTS_URL="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-artifacts" }}{{ .Address }}:{{ .Port }}{{ end }}"
 EOF
         destination = "local/env/service-discovery"
       }
