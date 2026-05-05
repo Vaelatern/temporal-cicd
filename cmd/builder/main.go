@@ -10,6 +10,7 @@ import (
 	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
 	temporal_envconfig "go.temporal.io/sdk/contrib/envconfig"
+	"go.temporal.io/sdk/contrib/sysinfo"
 	temporal_log "go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/worker"
 
@@ -47,6 +48,7 @@ func main() {
 
 	w := worker.New(c, "basic-builder", worker.Options{
 		EnableSessionWorker: true,
+		SysInfoProvider:     sysinfo.SysInfoProvider(),
 	})
 
 	m := MakeBuilder{
