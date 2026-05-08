@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,33 +21,33 @@ type Config struct {
 }
 
 type Dir struct {
-	Key string `env:"TCD_DIR_KEY" yaml:"key,omitempty"
+	Key string `env:"TCD_DIR_KEY, overwrite" yaml:"key,omitempty"
 					json:"key,omitempty"
 					toml:"key,omitempty"`
-	Cache string `env:"TCD_DIR_CACHE"
+	Cache string `env:"TCD_DIR_CACHE, overwrite"
 					yaml:"cache,omitempty"
 					json:"cache,omitempty"
 					toml:"cache,omitempty"`
-	CustomKickoff string `env:"TCD_DIR_CUSTOM_KICKOFF"
+	CustomKickoff string `env:"TCD_DIR_CUSTOM_KICKOFF, overwrite"
 					yaml:"custom_kickoff,omitempty"
 					json:"custom_kickoff,omitempty"
 					toml:"custom_kickoff,omitempty"`
-	RawArtifact string `env:"TCD_DIR_ARTIFACT"
+	RawArtifact string `env:"TCD_DIR_ARTIFACT, overwrite"
 					yaml:"raw_artifact,omitempty"
 					json:"raw_artifact,omitempty"
 					toml:"raw_artifact,omitempty"`
-	SSHKey string `env:"TCD_DIR_SSHKEY"
+	SSHKey string `env:"TCD_DIR_SSHKEY, overwrite"
 					yaml:"ssh_key,omitempty"
 					json:"ssh_key,omitempty"
 					toml:"ssh_key,omitempty"`
 }
 
 type CacheConfig struct {
-	URL string `env:"TCD_CACHE_URL"
+	URL string `env:"TCD_CACHE_URL, overwrite"
 					yaml:"url,omitempty"
 					json:"url,omitempty"
 					toml:"url,omitempty"`
-	Headers map[string]string `env:"TCD_CACHE_HEADERS"
+	Headers map[string]string `env:"TCD_CACHE_HEADERS, overwrite"
 					yaml:"headers,omitempty"
 					json:"headers,omitempty"
 					toml:"headers,omitempty"`
@@ -71,10 +72,8 @@ func LoadConfig() (*Config, error) {
 	}
 
 	info, err := os.Stat(configFile)
-	if err != nil {
-		return &conf, err
-	}
-	if info.IsDir() {
+	// don't check err except to skip loading if stat didn't find anything
+	if err == nil && info.IsDir() {
 		// Load directory of config files
 		cfg, err := loadConfigDir(configFile)
 		if err != nil {
@@ -83,7 +82,7 @@ func LoadConfig() (*Config, error) {
 		if cfg != nil {
 			mergeConfig(&conf, *cfg)
 		}
-	} else {
+	} else if err == nil {
 		// Load single config file
 		cfg, err := loadSingleConfigFile(configFile)
 		if err != nil {
@@ -92,6 +91,8 @@ func LoadConfig() (*Config, error) {
 		if cfg != nil {
 			mergeConfig(&conf, *cfg)
 		}
+	} else { // err != nil
+		log.Printf("Config file %s was not loaded - not found\n", configFile)
 	}
 
 	// Apply environment variables last (highest priority)

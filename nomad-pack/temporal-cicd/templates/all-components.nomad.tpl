@@ -26,6 +26,23 @@ EOF
       }
 [[ end ]]
 
+[[ define "config-file" ]]
+      template {
+	env  = true
+        data = <<EOF
+TCD_CONFIG_FILE=${NOMAD_TASK_DIR}/configuration
+EOF
+        destination   = "local/env/configuration"
+      }
+
+      template {
+        data = <<EOF
+[[ dig "config" (dict) .Args | tojson ]]
+EOF
+        destination   = "local/config.json"
+      }
+[[ end ]]
+
 job [[ getarg "jobname" .Args ]] {
   type        = "service"
   datacenters = [[ getarg "datacenters" .Args ]]
@@ -54,6 +71,8 @@ job [[ getarg "jobname" .Args ]] {
         volumes = ["custom-kickoff:/custom-kickoff",
         "keys.d:/keys"]
       }
+
+      [[ template "config-file" . ]]
 
       [[ template "auth-keys-d" . ]]
 
@@ -85,6 +104,8 @@ job [[ getarg "jobname" .Args ]] {
         volumes = ["repos:/repos", "ssh-keys:/ssh-keys", "keys.d:/keys"]
       }
 
+      [[ template "config-file" . ]]
+
       [[ template "auth-keys-d" . ]]
 
       [[ template "temporal-address-env-file" . ]]
@@ -115,6 +136,8 @@ job [[ getarg "jobname" .Args ]] {
         volumes = ["artifacts:/artifacts", "keys.d:/keys"]
       }
 
+      [[ template "config-file" . ]]
+
       [[ template "auth-keys-d" . ]]
 
       [[ template "temporal-address-env-file" . ]]
@@ -135,12 +158,14 @@ job [[ getarg "jobname" .Args ]] {
         image = "ghcr.io/vaelatern/temporal-cicd/builder:[[ dig "version" "builder" (dig "version" "default" "master" .Args) .Args ]]"
       }
 
+      [[ template "config-file" . ]]
+
       [[ template "temporal-address-env-file" . ]]
 
       template {
 	env = true
         data        = <<EOF
-TCD_CACHE_URL="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
+TCD_CACHE_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
 TCD_ARTIFACTS_URL="{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-artifacts" }}{{ .Address }}:{{ .Port }}{{ end }}"
 EOF
         destination = "local/env/service-discovery"
