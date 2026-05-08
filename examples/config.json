@@ -1,0 +1,17 @@
+{
+  "dir": {
+    "key": "../keys",
+    "cache": "../cache",
+    "custom_kickoff": "../custom-kickoff",
+    "raw_artifact": "../artifacts",
+    "ssh_key": "../ssh-keys"
+  },
+  "cache": {
+    "url": "http://localhost:8080",
+    "headers": {
+      "Authorization": "Bearer your-token-here",
+      "X-Custom-Header": "custom-value"
+    }
+  },
+  "listen": ":8080"
+}

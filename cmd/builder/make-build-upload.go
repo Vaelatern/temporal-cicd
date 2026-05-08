@@ -92,14 +92,14 @@ func (m MakeBuilder) UpdateCache(ctx context.Context, args WorkflowInput) error 
 	logger := activity.GetLogger(ctx)
 	logger.Info("Triggering cache", "repo", repo, "ref", ref)
 
-	tarballURL := fmt.Sprintf("%s/sync/%s/%s", m.config.CacheURL, repo, ref)
+	tarballURL := fmt.Sprintf("%s/sync/%s/%s", m.config.Cache.URL, repo, ref)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", tarballURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer a")
+	m.config.AddCacheHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to trigger cache: %w", err)
@@ -118,14 +118,14 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 		return "", err
 	}
 
-	tarballURL := fmt.Sprintf("%s/download/%s/%s", m.config.CacheURL, repo, ref)
+	tarballURL := fmt.Sprintf("%s/download/%s/%s", m.config.Cache.URL, repo, ref)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", tarballURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer a")
+	m.config.AddCacheHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to download tarball: %w", err)

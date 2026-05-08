@@ -33,14 +33,14 @@ func (g GenericBuilder) DetermineSpecificBuildFlow(ctx context.Context, input Wo
 	logger.Info("Determining build flow from .vaelci.json", "repo", repo, "ref", ref)
 
 	// Download tarball from cache
-	tarballURL := fmt.Sprintf("%s/download/%s/%s", g.config.CacheURL, repo, ref)
+	tarballURL := fmt.Sprintf("%s/download/%s/%s", g.config.Cache.URL, repo, ref)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", tarballURL, nil)
 	if err != nil {
 		return VaelCiConfig{}, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer a")
+	g.config.AddCacheHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return VaelCiConfig{}, fmt.Errorf("failed to download tarball: %w", err)

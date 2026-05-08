@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
 
-	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
 	temporal_envconfig "go.temporal.io/sdk/contrib/envconfig"
 	"go.temporal.io/sdk/contrib/sysinfo"
@@ -32,8 +30,8 @@ func logger() temporal_log.Logger {
 }
 
 func main() {
-	var conf config.Config
-	if err := envconfig.Process(context.Background(), &conf); err != nil {
+	conf, err := config.LoadConfig()
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -52,11 +50,11 @@ func main() {
 	})
 
 	m := MakeBuilder{
-		config: conf,
+		config: *conf,
 	}
 
 	g := GenericBuilder{
-		config: conf,
+		config: *conf,
 	}
 
 	w.RegisterWorkflow(m.MakeBuildUpload)

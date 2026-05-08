@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"github.com/sethvargo/go-envconfig"
 
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
@@ -16,8 +13,8 @@ import (
 )
 
 func main() {
-	var conf config.Config
-	if err := envconfig.Process(context.Background(), &conf); err != nil {
+	conf, err := config.LoadConfig()
+	if err != nil {
 		log.Fatal(err)
 	}
 

@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sethvargo/go-envconfig"
 	"go.temporal.io/sdk/client"
 	temporal_envconfig "go.temporal.io/sdk/contrib/envconfig"
 	temporal_log "go.temporal.io/sdk/log"
@@ -116,8 +115,8 @@ func logger() temporal_log.Logger {
 }
 
 func main() {
-	var conf config.Config
-	if err := envconfig.Process(context.Background(), &conf); err != nil {
+	conf, err := config.LoadConfig()
+	if err != nil {
 		log.Fatal(err)
 	}
 

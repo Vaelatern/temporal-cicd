@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -12,8 +11,6 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
-
-	"github.com/sethvargo/go-envconfig"
 
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
@@ -56,8 +53,8 @@ func (a artifactstore) GetArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	var conf config.Config
-	if err := envconfig.Process(context.Background(), &conf); err != nil {
+	conf, err := config.LoadConfig()
+	if err != nil {
 		log.Fatal(err)
 	}
 	auth := basicauth.AuthCore{KeyDir: conf.Dir.Key}
