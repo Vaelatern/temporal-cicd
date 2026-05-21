@@ -152,10 +152,11 @@ job [[ getarg "jobname" .Args ]] {
     }
 
     task "builder" {
-      driver = "docker"
+      driver = "oci-chroot"
 
       config {
         image = "ghcr.io/vaelatern/temporal-cicd/builder:[[ dig "version" "builder" (dig "version" "default" "master" .Args) .Args ]]"
+        bind_sockets = ["/var/run/docker.sock"]
       }
 
       [[ template "config-file" . ]]
