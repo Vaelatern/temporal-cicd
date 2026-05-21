@@ -2,6 +2,8 @@ package main
 
 import (
 	"archive/tar"
+	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,7 +50,27 @@ func (g GenericBuilder) DetermineSpecificBuildFlow(ctx context.Context, input Wo
 	defer resp.Body.Close()
 
 	// Read the tarball and look for .vaelci.json
-	tr := tar.NewReader(resp.Body)
+	bufReader := bufio.NewReader(resp.Body)
+	peek, err := bufReader.Peek(2)
+	if err != nil {
+		return VaelCiConfig{}, fmt.Errorf("failed to peek at tarball: %w", err)
+	}
+
+	var reader io.Reader
+	if peek[0] == 0x1f && peek[1] == 0x8b {
+		logger.Info("Tarball is gzip compressed")
+		gr, err := gzip.NewReader(bufReader)
+		if err != nil {
+			return VaelCiConfig{}, fmt.Errorf("failed to create gzip reader: %w", err)
+		}
+		defer gr.Close()
+		reader = gr
+	} else {
+		logger.Info("Tarball is not gzip compressed")
+		reader = bufReader
+	}
+
+	tr := tar.NewReader(reader)
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
