@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Vaelatern/temporal-cicd/internal/config"
@@ -107,6 +109,22 @@ func (m MakeBuilder) UpdateCache(ctx context.Context, args WorkflowInput) error 
 	return resp.Body.Close()
 }
 
+func extractTypeFromDisposition(disposition string) string {
+	if disposition == "" {
+		return ""
+	}
+	_, params, err := mime.ParseMediaType(disposition)
+	if err != nil {
+		return ""
+	}
+	filename, ok := params["filename"]
+	if !ok || filename == "" {
+		return ""
+	}
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
+	return ext
+}
+
 func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args WorkflowInput) (string, error) {
 	repo := args.Repository
 	ref := args.Ref
@@ -132,7 +150,14 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 	}
 	defer resp.Body.Close()
 
-	if err := extract.Unpack(ctx, tmpDir, resp.Body, extract.NewConfig()); err != nil {
+	extractType := extractTypeFromDisposition(resp.Header.Get("Content-Disposition"))
+	opts := []extract.ConfigOption{}
+	if extractType != "" {
+		logger.Info("Detected archive type from Content-Disposition filename", "type", extractType)
+		opts = append(opts, extract.WithExtractType(extractType))
+	}
+
+	if err := extract.Unpack(ctx, tmpDir, resp.Body, extract.NewConfig(opts...)); err != nil {
 		return "", fmt.Errorf("Failed to start tar command: %v\n", err)
 	}
 
