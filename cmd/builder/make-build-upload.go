@@ -151,11 +151,18 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 	}
 	defer resp.Body.Close()
 
-	extractType := extractTypeFromDisposition(resp.Header.Get("Content-Disposition"))
+	cdHeader := resp.Header.Get("Content-Disposition")
+	extractType := extractTypeFromDisposition(cdHeader)
 	opts := []extract.ConfigOption{}
 	if extractType != "" {
 		logger.Info("Detected archive type from Content-Disposition filename", "type", extractType)
 		opts = append(opts, extract.WithExtractType(extractType))
+	} else {
+		logger.Warn("No archive type in Content-Disposition, falling back to magic-byte detection",
+			"url", tarballURL,
+			"status", resp.StatusCode,
+			"content-disposition", cdHeader,
+			"all-headers", fmt.Sprintf("%v", resp.Header))
 	}
 
 	if err := extract.Unpack(ctx, tmpDir, resp.Body, extract.NewConfig(opts...)); err != nil {

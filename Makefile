@@ -1,4 +1,4 @@
-.PHONY: build-raw clean
+.PHONY: build-raw clean test
 
 build-raw: artifacts builder cache kickoff
 
