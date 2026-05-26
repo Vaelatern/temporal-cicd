@@ -30,7 +30,7 @@ EOF
       template {
 	env  = true
         data = <<EOF
-TCD_CONFIG_FILE=${NOMAD_TASK_DIR}/config.json
+TCD_CONFIG_FILE="{{ env "NOMAD_TASK_DIR" }}/config.json"
 EOF
         destination   = "local/env/configuration"
       }
