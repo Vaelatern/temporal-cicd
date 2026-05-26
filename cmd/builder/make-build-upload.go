@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,7 +95,7 @@ func (m MakeBuilder) UpdateCache(ctx context.Context, args WorkflowInput) error 
 	logger := activity.GetLogger(ctx)
 	logger.Info("Triggering cache", "repo", repo, "ref", ref)
 
-	tarballURL := fmt.Sprintf("%s/sync/%s/%s", m.config.Cache.URL, repo, ref)
+	tarballURL := fmt.Sprintf("%s/sync/%s/%s", m.config.Cache.URL, url.PathEscape(repo), url.PathEscape(ref))
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", tarballURL, nil)
@@ -136,7 +137,7 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 		return "", err
 	}
 
-	tarballURL := fmt.Sprintf("%s/download/%s/%s", m.config.Cache.URL, repo, ref)
+	tarballURL := fmt.Sprintf("%s/download/%s/%s", m.config.Cache.URL, url.PathEscape(repo), url.PathEscape(ref))
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", tarballURL, nil)

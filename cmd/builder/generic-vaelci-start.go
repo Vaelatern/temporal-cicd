@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/Vaelatern/temporal-cicd/internal/config"
@@ -35,7 +36,7 @@ func (g GenericBuilder) DetermineSpecificBuildFlow(ctx context.Context, input Wo
 	logger.Info("Determining build flow from .vaelci.json", "repo", repo, "ref", ref)
 
 	// Download tarball from cache
-	tarballURL := fmt.Sprintf("%s/download/%s/%s", g.config.Cache.URL, repo, ref)
+	tarballURL := fmt.Sprintf("%s/download/%s/%s", g.config.Cache.URL, url.PathEscape(repo), url.PathEscape(ref))
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", tarballURL, nil)
