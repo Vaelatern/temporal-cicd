@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -151,6 +152,11 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("cache returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
 	cdHeader := resp.Header.Get("Content-Disposition")
 	extractType := extractTypeFromDisposition(cdHeader)
 	opts := []extract.ConfigOption{}
@@ -158,11 +164,7 @@ func (m MakeBuilder) DownloadFromCacheActivity(ctx context.Context, args Workflo
 		logger.Info("Detected archive type from Content-Disposition filename", "type", extractType)
 		opts = append(opts, extract.WithExtractType(extractType))
 	} else {
-		logger.Warn("No archive type in Content-Disposition, falling back to magic-byte detection",
-			"url", tarballURL,
-			"status", resp.StatusCode,
-			"content-disposition", cdHeader,
-			"all-headers", fmt.Sprintf("%v", resp.Header))
+		logger.Warn("No archive type in Content-Disposition, falling back to magic-byte detection", "content-disposition", cdHeader)
 	}
 
 	if err := extract.Unpack(ctx, tmpDir, resp.Body, extract.NewConfig(opts...)); err != nil {
