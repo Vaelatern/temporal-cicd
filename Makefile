@@ -1,8 +1,22 @@
 .PHONY: build build-raw clean test
 
+DOCKER?=docker
+
 build-raw: artifacts builder cache kickoff
 
-build: build-raw
+build: docker-build-artifacts docker-build-builder docker-build-cache docker-build-kickoff
+
+docker-build-artifacts:
+	$(DOCKER) build -f Dockerfile.artifacts .
+
+docker-build-builder:
+	$(DOCKER) build -f Dockerfile.builder .
+
+docker-build-cache:
+	$(DOCKER) build -f Dockerfile.cache .
+
+docker-build-kickoff:
+	$(DOCKER) build -f Dockerfile.kickoff .
 
 test:
 	go test ./...
