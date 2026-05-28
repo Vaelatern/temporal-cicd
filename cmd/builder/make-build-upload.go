@@ -179,12 +179,18 @@ func (m MakeBuilder) BuildActivity(ctx context.Context, repoPath string) (string
 	cmd := exec.CommandContext(ctx, "make", "build")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
-	return string(output), err
+	if err != nil {
+		return string(output), fmt.Errorf("make build failed (%w):\n%s", err, string(output))
+	}
+	return string(output), nil
 }
 
 func (m MakeBuilder) UploadActivity(ctx context.Context, repoPath string) (string, error) {
 	cmd := exec.CommandContext(ctx, "make", "upload")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
-	return string(output), err
+	if err != nil {
+		return string(output), fmt.Errorf("make upload failed (%w):\n%s", err, string(output))
+	}
+	return string(output), nil
 }
