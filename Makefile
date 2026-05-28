@@ -1,6 +1,8 @@
-.PHONY: build-raw clean test
+.PHONY: build build-raw clean test
 
 build-raw: artifacts builder cache kickoff
+
+build: build-raw
 
 test:
 	go test ./...
