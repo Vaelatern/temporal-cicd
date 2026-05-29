@@ -6,7 +6,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -o /builder ./cmd/builder
 
 FROM docker.io/alpine:latest
-RUN apk add --no-cache make docker-cli
+RUN apk add --no-cache make docker
 COPY --from=builder /builder /builder
 WORKDIR /repos
 ENTRYPOINT ["/builder"]
