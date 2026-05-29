@@ -126,8 +126,13 @@ func (g GenericBuilder) GenericVaelCiCdStart(ctx workflow.Context, input Workflo
 	logger.Info("Determined build pattern", "build-pattern", vaelciConfig.BuildPattern)
 
 	// Start child workflow with the build pattern from .vaelci.json
+	info := workflow.GetInfo(ctx)
+	childWorkflowID := info.WorkflowExecution.ID + " " + vaelciConfig.BuildPattern
 	input.BuildPattern = vaelciConfig.BuildPattern
-	childErr := workflow.ExecuteChildWorkflow(ctx, vaelciConfig.BuildPattern, input).Get(ctx, nil)
+	childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID: childWorkflowID,
+	})
+	childErr := workflow.ExecuteChildWorkflow(childCtx, vaelciConfig.BuildPattern, input).Get(ctx, nil)
 	if childErr != nil {
 		logger.Error("Child workflow failed", "error", childErr)
 		return childErr
