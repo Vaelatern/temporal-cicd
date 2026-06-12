@@ -2,4 +2,7 @@
 /cache
 /builder
 /kickoff
+/deployer
 /working-structure
+# Sometimes useful when working in a constrained env, a local go cache
+.go-cache

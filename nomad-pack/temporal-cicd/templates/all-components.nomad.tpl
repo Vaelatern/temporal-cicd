@@ -173,4 +173,24 @@ EOF
       }
     }
   }
+
+  group "deployer" {
+    count = 1
+
+    network {
+      mode = "bridge"
+    }
+
+    task "deployer" {
+      driver = "docker"
+
+      config {
+        image = "ghcr.io/vaelatern/temporal-cicd/deployer:[[ dig "version" "deployer" (dig "version" "default" "master" .Args) .Args ]]"
+      }
+
+      [[ template "config-file" . ]]
+
+      [[ template "temporal-address-env-file" . ]]
+    }
+  }
 }

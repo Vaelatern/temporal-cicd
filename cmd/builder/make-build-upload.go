@@ -84,6 +84,22 @@ func (m MakeBuilder) MakeBuildUpload(ctx workflow.Context, input WorkflowInput) 
 		}
 	}
 
+	// Start Deployment child workflow on the "deployer" task queue.
+	// Abandon the child (do not wait for completion) but keep the parent
+	// operational until the child has launched successfully.
+	info := workflow.GetInfo(ctx)
+	childWorkflowID := info.WorkflowExecution.ID + "-deployer"
+	childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID: childWorkflowID,
+		TaskQueue:  "deployer",
+	})
+	childFuture := workflow.ExecuteChildWorkflow(childCtx, "Deployment", input)
+	// Wait only until launch (child started); then abandon it
+	if err := childFuture.GetChildWorkflowExecution().Get(ctx, nil); err != nil {
+		logger.Error("Failed to launch deployer child workflow", "error", err)
+		return WorkflowOutput{}, err
+	}
+
 	return WorkflowOutput{
 		BuildOutput:  buildOutput,
 		UploadOutput: uploadOutput,

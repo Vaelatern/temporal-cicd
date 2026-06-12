@@ -2,9 +2,9 @@
 
 DOCKER?=docker
 
-build-raw: artifacts builder cache kickoff
+build-raw: artifacts builder cache kickoff deployer
 
-build: docker-build-artifacts docker-build-builder docker-build-cache docker-build-kickoff
+build: docker-build-artifacts docker-build-builder docker-build-cache docker-build-kickoff docker-build-deployer
 
 docker-build-artifacts:
 	$(DOCKER) build -f Dockerfile.artifacts .
@@ -18,11 +18,14 @@ docker-build-cache:
 docker-build-kickoff:
 	$(DOCKER) build -f Dockerfile.kickoff .
 
+docker-build-deployer:
+	$(DOCKER) build -f Dockerfile.deployer .
+
 test:
 	go test ./...
 
 clean:
-	rm -rf artifacts builder cache kickoff
+	rm -rf artifacts builder cache kickoff deployer
 
 artifacts: cmd/artifacts internal/*/*.go internal/*/*/*.go
 	go build ./cmd/artifacts
@@ -35,5 +38,8 @@ cache: cmd/cache internal/*/*.go internal/*/*/*.go
 
 kickoff: cmd/kickoff internal/*/*.go internal/*/*/*.go
 	go build ./cmd/kickoff
+
+deployer: cmd/deployer internal/*/*.go internal/*/*/*.go
+	go build ./cmd/deployer
 
 

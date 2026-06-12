@@ -3,6 +3,7 @@
 /cache
 /builder
 /kickoff
+/deployer
 /working-structure
 /Dockerfile.*
 /*.sh
