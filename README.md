@@ -56,3 +56,5 @@ The data for a kickoff is
 ```
 
 where the `compat-patch` will be fed to `git apply` on the source tree before the build is triggered. Yes, git apply on a random directory does work. This feature is meant to only be used to carry local CI compatibility patches if the upstream is not suitable, such as an upstream you do not control but wish to have your CI build anyway.
+
+There is also a way to set off webhooks from the major git hosting platforms. The webhook URL will include repo but not ref, ref will be deduced from the webhook payload. Authorization token may need to be passed as a URL parameter `?token=aaa`.

@@ -80,10 +80,14 @@ func (a *AuthCore) Authorize(r *http.Request) bool {
 	a.authMu.RLock()
 	defer a.authMu.RUnlock()
 	token := r.Header.Get("Authorization")
-	if !strings.HasPrefix(token, "Bearer ") {
-		return false
+	if strings.HasPrefix(token, "Bearer ") {
+		token = strings.TrimPrefix(token, "Bearer ")
+	} else {
+		token = r.URL.Query().Get("token")
+		if token == "" {
+			return false
+		}
 	}
-	token = strings.TrimPrefix(token, "Bearer ")
 	rule, ok := a.tokenMap[token]
 	if !ok {
 		return false

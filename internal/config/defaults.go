@@ -15,12 +15,16 @@ import (
 )
 
 type Config struct {
-	Dir    Dir         `yaml:"dir,omitempty" json:"dir,omitempty" toml:"dir,omitempty"`
-	Cache  CacheConfig `yaml:"cache,omitempty" json:"cache,omitempty" toml:"cache,omitempty"`
-	Listen string      `yaml:"listen,omitempty" json:"listen,omitempty" toml:"listen,omitempty"`
+	Dir            Dir         `yaml:"dir,omitempty" json:"dir,omitempty" toml:"dir,omitempty"`
+	Cache          CacheConfig `yaml:"cache,omitempty" json:"cache,omitempty" toml:"cache,omitempty"`
+	Listen         string      `yaml:"listen,omitempty" json:"listen,omitempty" toml:"listen,omitempty"`
+	SharedSecrets  SharedSecretsConfig `yaml:"shared_secrets,omitempty" json:"shared_secrets,omitempty" toml:"shared_secrets,omitempty"`
 }
 
 type Dir struct {
+	SharedSecrets string `env:"TCD_DIR_SHAREDSECRETS, overwrite" yaml:"shared-secrets,omitempty"
+					json:"shared-secrets,omitempty"
+					toml:"shared-secrets,omitempty"`
 	Key string `env:"TCD_DIR_KEY, overwrite" yaml:"key,omitempty"
 					json:"key,omitempty"
 					toml:"key,omitempty"`
@@ -53,10 +57,15 @@ type CacheConfig struct {
 					toml:"headers,omitempty"`
 }
 
+type SharedSecretsConfig struct {
+	Dir string `env:"TCD_DIR_SHAREDSECRETS, overwrite" yaml:"dir,omitempty" json:"dir,omitempty" toml:"dir,omitempty"`
+}
+
 func LoadConfig() (*Config, error) {
 	var conf Config
 
 	// Set defaults
+	conf.Dir.SharedSecrets = "../shared-secrets"
 	conf.Dir.Key = "../keys"
 	conf.Dir.Cache = "../cache"
 	conf.Dir.CustomKickoff = "../custom-kickoff"
