@@ -4,9 +4,12 @@ dir:
   custom_kickoff: "../custom-kickoff"
   raw_artifact: "../artifacts"
   ssh_key: "../ssh-keys"
+  shared-secrets: "../shared-secrets"
 cache:
   url: "http://localhost:8080"
   headers:
     Authorization: "Bearer your-token-here"
     X-Custom-Header: "custom-value"
+shared_secrets:
+  dir: "../shared-secrets"
 listen: ":8080"
