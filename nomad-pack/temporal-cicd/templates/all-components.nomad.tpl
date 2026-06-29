@@ -5,6 +5,20 @@
         change_mode   = "signal"
         change_signal = "SIGUSR1"
         data          = <<EOF
+{{ range nomadVarList [[ dig "shared-secrets-path" "temporal-cicd/shared-secrets" .Args | quote ]] }}
+# {{ .Path }}
+{{ with nomadVar .Path }}
+{{ .yaml.Value }}
+{{ end }}
+{{ end }}
+EOF
+        destination   = "share-secrets/nomad-controlled.yml"
+      }
+
+      template {
+        change_mode   = "signal"
+        change_signal = "SIGUSR1"
+        data          = <<EOF
 {{ range nomadVarList [[ dig "keys-d-path" "temporal-cicd/keys-d" .Args | quote ]] }}
 # {{ .Path }}
 {{ with nomadVar .Path }}
