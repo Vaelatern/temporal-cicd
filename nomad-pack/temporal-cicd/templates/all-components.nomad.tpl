@@ -74,6 +74,7 @@ job [[ getarg "jobname" .Args ]] {
     service {
       provider="nomad"
       port = "http"
+      tags = [[ dig "service" "kickoff" "tags" (list) .Args | tohcl ]]
     }
 
     task "kickoff" {
@@ -107,6 +108,7 @@ job [[ getarg "jobname" .Args ]] {
     service {
       provider="nomad"
       port = "http"
+      tags = [[ dig "service" "cache" "tags" (list) .Args | tohcl ]]
     }
 
     task "cache" {
@@ -139,6 +141,7 @@ job [[ getarg "jobname" .Args ]] {
     service {
       provider="nomad"
       port = "http"
+      tags = [[ dig "service" "artifacts" "tags" (list) .Args | tohcl ]]
     }
 
     task "artifacts" {
