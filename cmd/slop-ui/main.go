@@ -35,6 +35,7 @@ type UI struct {
 	services  []ServiceCfg
 	endpoints []Endpoint
 	token     string // default token used for /info/all fetches
+	baseURL   string // UI path prefix, e.g. /ui (no trailing slash)
 	temporal  client.Client
 }
 
@@ -45,8 +46,34 @@ func env(k, def string) string {
 	return def
 }
 
+// trimBaseURL mirrors awxy: "/" means no prefix; otherwise strip trailing slash.
+func trimBaseURL(baseURL string) string {
+	if baseURL == "" || baseURL == "/" {
+		return ""
+	}
+	if !strings.HasPrefix(baseURL, "/") {
+		baseURL = "/" + baseURL
+	}
+	return strings.TrimRight(baseURL, "/")
+}
+
+func withBaseURL(base string, h http.Handler) http.Handler {
+	if base == "" {
+		return h
+	}
+	stripped := http.StripPrefix(base, h)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == base {
+			http.Redirect(w, r, base+"/", http.StatusFound)
+			return
+		}
+		stripped.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	ui := &UI{
+		baseURL: trimBaseURL(env("BASE_URL", "")),
 		services: []ServiceCfg{
 			{Name: "cache", URL: strings.TrimRight(env("TCD_CACHE_URL", "http://localhost:8080"), "/")},
 			{Name: "kickoff", URL: strings.TrimRight(env("TCD_KICKOFF_URL", "http://localhost:8081"), "/")},
@@ -86,8 +113,8 @@ func main() {
 	mux.HandleFunc("GET /api/temporal", ui.temporalStatus)
 
 	listen := env("TCD_LISTEN", ":8090")
-	log.Printf("[slop-ui] Listening on %s (admin UI, no auth)", listen)
-	log.Fatal(http.ListenAndServe(listen, mux))
+	log.Printf("[slop-ui] Listening on %s base=%q (admin UI, no auth)", listen, ui.baseURL)
+	log.Fatal(http.ListenAndServe(listen, withBaseURL(ui.baseURL, mux)))
 }
 
 func (ui *UI) svcURL(name string) string {
@@ -140,12 +167,12 @@ func (ui *UI) proxyInfo(w http.ResponseWriter, r *http.Request) {
 
 func (ui *UI) temporalStatus(w http.ResponseWriter, r *http.Request) {
 	type qstat struct {
-		TaskQueue     string `json:"task_queue"`
-		Kind          string `json:"kind"`
-		Pollers       int    `json:"pollers"`
-		Backlog       int64  `json:"backlog"`
-		Error         string `json:"error,omitempty"`
-		PollerIds     []string `json:"poller_identities,omitempty"`
+		TaskQueue string   `json:"task_queue"`
+		Kind      string   `json:"kind"`
+		Pollers   int      `json:"pollers"`
+		Backlog   int64    `json:"backlog"`
+		Error     string   `json:"error,omitempty"`
+		PollerIds []string `json:"poller_identities,omitempty"`
 	}
 	out := map[string]any{"queues": []qstat{}}
 	if ui.temporal == nil {
@@ -156,7 +183,10 @@ func (ui *UI) temporalStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	queues := []struct{ name, kind string; tqType client.TaskQueueType }{
+	queues := []struct {
+		name, kind string
+		tqType     client.TaskQueueType
+	}{
 		{"basic-builder", "workflow", client.TaskQueueTypeWorkflow},
 		{"basic-builder", "activity", client.TaskQueueTypeActivity},
 		{"deployer", "workflow", client.TaskQueueTypeWorkflow},
@@ -361,7 +391,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <nav>
   {{range .Endpoints}}
   <button class="ep"
-    hx-get="/api/call?service={{.Service}}&method={{urlquery .Method}}&path={{urlquery .Path}}&token={{urlquery $.Token}}"
+    hx-get="api/call?service={{.Service}}&method={{urlquery .Method}}&path={{urlquery .Path}}&token={{urlquery $.Token}}"
     hx-target="#work"
     hx-swap="innerHTML">
     <span class="pill">{{.Service}}</span> <code>{{.Method}}</code> {{.Path}}
@@ -376,7 +406,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
       <div class="row">
         {{range .Services}}
         <button class="secondary" style="background:transparent;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:.45rem .7rem;cursor:pointer"
-          hx-get="/api/info/{{.Name}}?token={{urlquery $.Token}}"
+          hx-get="api/info/{{.Name}}?token={{urlquery $.Token}}"
           hx-target="#info-out"
           hx-swap="innerHTML"
           hx-on::after-request="(function(t){try{t.textContent=JSON.stringify(JSON.parse(event.detail.xhr.responseText),null,2)}catch(e){t.textContent=event.detail.xhr.responseText}})(document.getElementById('info-out'))">
@@ -389,7 +419,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
     <div class="card">
       <h3 style="margin-top:0">temporal queues (builder / deployer)</h3>
       <button class="secondary" style="background:transparent;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:.45rem .7rem;cursor:pointer;margin-bottom:.5rem"
-        hx-get="/api/temporal"
+        hx-get="api/temporal"
         hx-target="#tq-out"
         hx-swap="innerHTML"
         hx-on::after-request="(function(t){try{t.textContent=JSON.stringify(JSON.parse(event.detail.xhr.responseText),null,2)}catch(e){t.textContent=event.detail.xhr.responseText}})(document.getElementById('tq-out'))">
@@ -409,9 +439,9 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 var formTmpl = template.Must(template.New("form").Parse(`
 <h3 style="margin-top:0"><span class="pill">{{.Service}}</span> <code>{{.Method}}</code> {{.Path}}</h3>
 <p class="muted" style="margin-top:0">base: {{.Base}}</p>
-<form hx-post="/api/call" hx-target="#result" hx-swap="innerHTML"
-      hx-on:input="htmx.ajax('GET','/api/curl?'+new URLSearchParams(new FormData(this)).toString(),{target:'#curl',swap:'innerHTML'})"
-      hx-on:change="htmx.ajax('GET','/api/curl?'+new URLSearchParams(new FormData(this)).toString(),{target:'#curl',swap:'innerHTML'})">
+<form hx-post="api/call" hx-target="#result" hx-swap="innerHTML"
+      hx-on:input="htmx.ajax('GET','api/curl?'+new URLSearchParams(new FormData(this)).toString(),{target:'#curl',swap:'innerHTML'})"
+      hx-on:change="htmx.ajax('GET','api/curl?'+new URLSearchParams(new FormData(this)).toString(),{target:'#curl',swap:'innerHTML'})">
   <input type="hidden" name="service" value="{{.Service}}">
   <input type="hidden" name="method" value="{{.Method}}">
   <div class="row">
@@ -429,7 +459,7 @@ var formTmpl = template.Must(template.New("form").Parse(`
   <div class="actions">
     <button type="submit">send</button>
     <button type="button" class="secondary"
-      onclick="htmx.ajax('GET','/api/curl?'+new URLSearchParams(new FormData(this.form)).toString(),{target:'#curl',swap:'innerHTML'})">
+      onclick="htmx.ajax('GET','api/curl?'+new URLSearchParams(new FormData(this.form)).toString(),{target:'#curl',swap:'innerHTML'})">
       refresh curl
     </button>
   </div>
@@ -440,7 +470,7 @@ var formTmpl = template.Must(template.New("form").Parse(`
 <script>
 (function(){
   const f = document.querySelector('#work form');
-  if (f) htmx.ajax('GET','/api/curl?'+new URLSearchParams(new FormData(f)).toString(),{target:'#curl',swap:'innerHTML'});
+  if (f) htmx.ajax('GET','api/curl?'+new URLSearchParams(new FormData(f)).toString(),{target:'#curl',swap:'innerHTML'});
 })();
 </script>
 `))

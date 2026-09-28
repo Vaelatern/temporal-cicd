@@ -241,6 +241,7 @@ EOF
 	env = true
         data        = <<EOF
 TCD_LISTEN=":8090"
+BASE_URL="[[ dig "slop-ui" "base-url" "" .Args ]]"
 TCD_CACHE_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
 TCD_KICKOFF_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-kickoff" }}{{ .Address }}:{{ .Port }}{{ end }}"
 TCD_ARTIFACTS_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-artifacts" }}{{ .Address }}:{{ .Port }}{{ end }}"
