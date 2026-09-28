@@ -4,6 +4,7 @@
 /builder
 /kickoff
 /deployer
+/slop-ui
 /working-structure
 /Dockerfile.*
 /*.sh

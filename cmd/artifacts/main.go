@@ -15,6 +15,7 @@ import (
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
 	"github.com/Vaelatern/temporal-cicd/internal/config"
+	"github.com/Vaelatern/temporal-cicd/internal/infoall"
 )
 
 type artifactstore struct {
@@ -75,6 +76,19 @@ func main() {
 
 	r.Use(auth.AuthMiddleware)
 
+	routes := []string{
+		"PUT /{path...}",
+		"GET /{path...}",
+		"GET /.vaelcicd/info/all",
+	}
+	// register before catch-alls so ServeMux prefers the literal path
+	r.Handle("GET /.vaelcicd/info/all", infoall.Handler{
+		Service: "artifacts",
+		Routes:  routes,
+		Roots: map[string]string{
+			"artifacts": conf.Dir.RawArtifact,
+		},
+	})
 	r.HandleFunc("PUT /{path...}", a.PutArtifact)
 	r.HandleFunc("GET /{path...}", a.GetArtifact)
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

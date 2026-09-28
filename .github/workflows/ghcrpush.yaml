@@ -22,7 +22,7 @@ jobs:
 
     strategy:
       matrix:
-        service: [artifacts, builder, cache, kickoff, deployer]
+        service: [artifacts, builder, cache, kickoff, deployer, slop-ui]
     
     steps:
       - name: Checkout code

@@ -24,6 +24,7 @@ import (
 	"github.com/Vaelatern/temporal-cicd/internal/aerouter"
 	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
 	"github.com/Vaelatern/temporal-cicd/internal/config"
+	"github.com/Vaelatern/temporal-cicd/internal/infoall"
 )
 
 type KickoffRequest struct {
@@ -409,10 +410,23 @@ func main() {
 	r := aerouter.NewRouter()
 	r.Use(auth.AuthMiddleware)
 
+	routes := []string{
+		"KICKOFF /{repo}/{ref}",
+		"KICKOFF /",
+		"POST /hooks/{source}/{repo}",
+		"GET /.vaelcicd/info/all",
+	}
 	r.HandleFunc("KICKOFF /{repo}/{ref}", k.kickoffHandler)
 	r.HandleFunc("KICKOFF /", k.kickoffHandler)
-
 	r.HandleFunc("POST /hooks/{source}/{repo}", k.webhookHandler)
+	r.Handle("GET /.vaelcicd/info/all", infoall.Handler{
+		Service: "kickoff",
+		Routes:  routes,
+		Roots: map[string]string{
+			"custom-kickoff": conf.Dir.CustomKickoff,
+			"shared-secrets": conf.Dir.SharedSecrets,
+		},
+	})
 
 	log.Printf("[kickoff] Listening on %s\n", conf.Listen)
 	log.Fatal(http.ListenAndServe(conf.Listen, r))

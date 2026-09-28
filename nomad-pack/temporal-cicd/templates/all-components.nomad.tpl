@@ -210,4 +210,44 @@ EOF
       [[ template "temporal-address-env-file" . ]]
     }
   }
+
+  group "slop-ui" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "http" {
+	to = 8090
+      }
+    }
+
+    service {
+      provider="nomad"
+      port = "http"
+      tags = [[ dig "service" "slop-ui" "tags" (list) .Args | tohcl ]]
+    }
+
+    task "slop-ui" {
+      driver = "docker"
+
+      config {
+        image = "ghcr.io/vaelatern/temporal-cicd/slop-ui:[[ dig "version" "slop-ui" (dig "version" "default" "master" .Args) .Args ]]"
+        ports = ["http"]
+      }
+
+      [[ template "temporal-address-env-file" . ]]
+
+      template {
+	env = true
+        data        = <<EOF
+TCD_LISTEN=":8090"
+TCD_CACHE_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-cache" }}{{ .Address }}:{{ .Port }}{{ end }}"
+TCD_KICKOFF_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-kickoff" }}{{ .Address }}:{{ .Port }}{{ end }}"
+TCD_ARTIFACTS_URL="http://{{ range nomadService 1 (env "NOMAD_ALLOC_ID") "[[ getarg "jobname" .Args | unquote ]]-artifacts" }}{{ .Address }}:{{ .Port }}{{ end }}"
+TCD_SLOP_TOKEN="[[ dig "slop-ui" "token" "" .Args ]]"
+EOF
+        destination = "local/env/service-discovery"
+      }
+    }
+  }
 }
