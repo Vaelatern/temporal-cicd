@@ -42,12 +42,16 @@ func main() {
 		"POST /sync/{repo}/{ref}",
 		"PUT /sync/{repo}",
 		"POST /sync/{repo}",
+		"GET /sync/{repo}",
+		"DELETE /sync/{repo}",
 		"GET /download/{repo}/{ref}",
 		"GET /.vaelcicd/info/all",
 	}
 	r.HandleFunc("POST /sync/{repo}/{ref}", c.SyncRef)
 	r.HandleFunc("PUT /sync/{repo}", c.NewRef)
 	r.HandleFunc("POST /sync/{repo}", c.AdjustRef)
+	r.HandleFunc("GET /sync/{repo}", c.GetRepo)
+	r.HandleFunc("DELETE /sync/{repo}", c.DeleteRepo)
 	r.HandleFunc("GET /download/{repo}/{ref}", c.GetTarball)
 	r.Handle("GET /.vaelcicd/info/all", infoall.Handler{
 		Service: "cache",

@@ -5,5 +5,7 @@
 /deployer
 /slop-ui
 /working-structure
+/terraform-provider/terraform-provider-lrcicd
+
 # Sometimes useful when working in a constrained env, a local go cache
 .go-cache

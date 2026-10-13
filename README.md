@@ -14,11 +14,18 @@ To do that we have a small go program that sits on top of a disk. That disk stor
 
 To tell the go program to update and make sure the ref is up to date, hit the endpoint: POST `/sync/$reponame/$ref`.
 
-To add a repo to the cache, hit `PUT /sync/$reponame` with the body being a json object as such: `{"url": "git@github.com:owner/repo.git", "ssh-reading-private-key": "SSH_KEY_HERE"}`. SSH keys are stored content-addressed (the sha256sum of the ssh key is the filename, and the repository is configured to use that ssh key for any updates.
+To add a repo to the cache, hit `PUT /sync/$reponame` with the body being a json object as such: `{"url": "git@github.com:owner/repo.git", "ssh-reading-private-key": "SSH_KEY_HERE"}`. SSH keys are stored content-addressed (the sha256sum of the ssh key is the filename, and the repository is configured to use that ssh key for any updates. WIth the same body, if you need to update an existing registration, use POST for the same path, or DELETE to remove it completely.
 
 To fetch from the cache, use GET `/download/$reponame/$ref.tar.gz` and git archive will produce the latest tarball of the reference for download.
 
-The Cache is two parts. One is a go program, and the other is a dockerfile running the one program with git installed, and a volume mount at `/repos` for the git repositories we cache.
+The Cache is two parts. One is a go program, and the other is a dockerfile running the one program with git installed, and a volume mount at `/repos` for the git repositories we cache. This is the most stateful bit of the program, and `./terraform-provider` exists to help handle it.
+
+```hcl
+provider "lrcicd" {
+  cache_url = "http://cache.example:8080"
+  token     = var.registration_token # needs PUT/POST/GET/DELETE /sync/.*
+}
+```
 
 ### Artifacts
 

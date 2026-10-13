@@ -84,6 +84,8 @@ func main() {
 			{Service: "cache", Method: "GET", Path: "/.vaelcicd/info/all", Notes: "admin dump"},
 			{Service: "cache", Method: "PUT", Path: "/sync/{repo}", Body: `{"url":"git@github.com:owner/repo.git","ssh-reading-private-key":""}`, Notes: "register repo"},
 			{Service: "cache", Method: "POST", Path: "/sync/{repo}", Body: `{"url":"git@github.com:owner/repo.git","ssh-reading-private-key":""}`, Notes: "adjust repo"},
+			{Service: "cache", Method: "GET", Path: "/sync/{repo}", Notes: "read registration"},
+			{Service: "cache", Method: "DELETE", Path: "/sync/{repo}", Notes: "unregister repo"},
 			{Service: "cache", Method: "POST", Path: "/sync/{repo}/{ref}", Notes: "fetch ref"},
 			{Service: "cache", Method: "GET", Path: "/download/{repo}/{ref}", Notes: "tarball"},
 			{Service: "artifacts", Method: "GET", Path: "/.vaelcicd/info/all", Notes: "admin dump"},

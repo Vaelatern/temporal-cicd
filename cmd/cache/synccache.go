@@ -58,6 +58,67 @@ func repoWithOriginURL(path string, url string) bool {
 	return true
 }
 
+func gitConfigSet(repoPath, key, value string) error {
+	cmd := exec.Command("git", "config", key, value)
+	cmd.Env = append(cmd.Env, "GIT_DIR="+repoPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s: %s", err, out)
+	}
+	return nil
+}
+
+func gitConfigGet(repoPath, key string) string {
+	cmd := exec.Command("git", "config", "--get", key)
+	cmd.Env = append(cmd.Env, "GIT_DIR="+repoPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func originURL(repoPath string) (string, error) {
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	cmd.Env = append(cmd.Env, "GIT_DIR="+repoPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s: %s", err, out)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// storeSSHKey content-addresses the private key; returns path + derived public key.
+func (s synccache) storeSSHKey(privateKey string) (path, pub string, err error) {
+	hasher := sha256.New()
+	hasher.Write([]byte(privateKey))
+	path = filepath.Join(s.keypath, hex.EncodeToString(hasher.Sum(nil)))
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		keyContent := privateKey
+		if !strings.HasSuffix(keyContent, "\n") {
+			keyContent += "\n"
+		}
+		if err := ioutil.WriteFile(path, []byte(keyContent), 0600); err != nil {
+			return "", "", err
+		}
+	}
+	cmd := exec.Command("ssh-keygen", "-y", "-f", path)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return path, "", fmt.Errorf("ssh-keygen -y: %s: %s", err, out)
+	}
+	return path, strings.TrimSpace(string(out)), nil
+}
+
+func configureRepoSSH(repoPath, sshKeyPath, pub string) error {
+	if err := gitConfigSet(repoPath, "core.sshCommand", "ssh -F /dev/null -i "+sshKeyPath+" -o StrictHostKeyChecking=accept-new"); err != nil {
+		return err
+	}
+	if err := gitConfigSet(repoPath, "vaelci.sshKeyPath", sshKeyPath); err != nil {
+		return err
+	}
+	return gitConfigSet(repoPath, "vaelci.sshKeyPublic", pub)
+}
+
 func (s synccache) NewRef(w http.ResponseWriter, r *http.Request) {
 	repo := r.PathValue("repo")
 
@@ -73,22 +134,10 @@ func (s synccache) NewRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasher := sha256.New()
-	hasher.Write([]byte(req.SSHReadingPrivateKey))
-	hashBytes := hasher.Sum(nil)
-	hashString := hex.EncodeToString(hashBytes)
-
-	sshKeyPath := filepath.Join(s.keypath, hashString)
-	if _, err := os.Stat(sshKeyPath); os.IsNotExist(err) {
-		keyContent := req.SSHReadingPrivateKey
-		if !strings.HasSuffix(keyContent, "\n") {
-			keyContent += "\n"
-		}
-		err = ioutil.WriteFile(sshKeyPath, []byte(keyContent), 0600)
-		if err != nil {
-			http.Error(w, "failed to write ssh key", 500)
-			return
-		}
+	sshKeyPath, pub, err := s.storeSSHKey(req.SSHReadingPrivateKey)
+	if err != nil {
+		http.Error(w, "failed to store ssh key: "+err.Error(), 500)
+		return
 	}
 
 	repoPath := filepath.Join(s.fileroot, repo)
@@ -108,11 +157,8 @@ func (s synccache) NewRef(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, string(out), 500)
 			return
 		}
-		cmd = exec.Command("git", "config", "core.sshCommand", "ssh -F /dev/null -i "+sshKeyPath+" -o StrictHostKeyChecking=accept-new")
-		cmd.Dir = s.fileroot
-		cmd.Env = append(cmd.Env, "GIT_DIR="+repoPath)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			http.Error(w, string(out), 500)
+		if err := configureRepoSSH(repoPath, sshKeyPath, pub); err != nil {
+			http.Error(w, err.Error(), 500)
 			return
 		}
 		w.Write([]byte("repo registered"))
@@ -136,22 +182,10 @@ func (s synccache) AdjustRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasher := sha256.New()
-	hasher.Write([]byte(req.SSHReadingPrivateKey))
-	hashBytes := hasher.Sum(nil)
-	hashString := hex.EncodeToString(hashBytes)
-
-	sshKeyPath := filepath.Join(s.keypath, hashString)
-	if _, err := os.Stat(sshKeyPath); os.IsNotExist(err) {
-		keyContent := req.SSHReadingPrivateKey
-		if !strings.HasSuffix(keyContent, "\n") {
-			keyContent += "\n"
-		}
-		err = ioutil.WriteFile(sshKeyPath, []byte(keyContent), 0600)
-		if err != nil {
-			http.Error(w, "failed to write ssh key", 500)
-			return
-		}
+	sshKeyPath, pub, err := s.storeSSHKey(req.SSHReadingPrivateKey)
+	if err != nil {
+		http.Error(w, "failed to store ssh key: "+err.Error(), 500)
+		return
 	}
 
 	repoPath := filepath.Join(s.fileroot, repo)
@@ -163,16 +197,49 @@ func (s synccache) AdjustRef(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, string(out), 500)
 			return
 		}
-		cmd = exec.Command("git", "config", "core.sshCommand", "ssh -F /dev/null -i "+sshKeyPath+" -o StrictHostKeyChecking=accept-new")
-		cmd.Dir = s.fileroot
-		cmd.Env = append(cmd.Env, "GIT_DIR="+repoPath)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			http.Error(w, string(out), 500)
-			return
-		}
-		w.Write([]byte("repo settings adjusted"))
 	}
-	w.Write([]byte("repo settings consistent"))
+	// always refresh ssh config so key-only changes stick
+	if err := configureRepoSSH(repoPath, sshKeyPath, pub); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Write([]byte("repo settings adjusted"))
+}
+
+// GetRepo returns registration state for Terraform Read.
+// Body: {"url","ssh-reading-public-key"}. 404 if not a bare repo.
+func (s synccache) GetRepo(w http.ResponseWriter, r *http.Request) {
+	repo := r.PathValue("repo")
+	repoPath := filepath.Join(s.fileroot, repo)
+	if !isBareRepository(repoPath) {
+		http.Error(w, "repo not registered", http.StatusNotFound)
+		return
+	}
+	url, err := originURL(repoPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"url":                    url,
+		"ssh-reading-public-key": gitConfigGet(repoPath, "vaelci.sshKeyPublic"),
+	})
+}
+
+// DeleteRepo removes the bare repo dir. SSH keys are content-addressed and shared — left alone.
+func (s synccache) DeleteRepo(w http.ResponseWriter, r *http.Request) {
+	repo := r.PathValue("repo")
+	repoPath := filepath.Join(s.fileroot, repo)
+	if !isBareRepository(repoPath) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err := os.RemoveAll(repoPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s synccache) GetTarball(w http.ResponseWriter, r *http.Request) {
