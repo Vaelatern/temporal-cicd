@@ -53,7 +53,10 @@ func (s *SharedSecrets) Load() {
 
 	if !info.IsDir() {
 		// treat as single file
+		before := len(s.secrets)
 		s.loadFile(s.Dir)
+		log.Printf("[shared-secrets] loaded %s (+%d)", s.Dir, len(s.secrets)-before)
+		log.Printf("[shared-secrets] loaded %d secrets", len(s.secrets))
 		return
 	}
 
@@ -72,7 +75,9 @@ func (s *SharedSecrets) Load() {
 			continue
 		}
 		path := filepath.Join(s.Dir, name)
+		before := len(s.secrets)
 		s.loadFile(path)
+		log.Printf("[shared-secrets] loaded %s (+%d)", path, len(s.secrets)-before)
 	}
 
 	log.Printf("[shared-secrets] loaded %d secrets", len(s.secrets))

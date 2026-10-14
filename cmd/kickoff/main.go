@@ -55,14 +55,6 @@ func (k *KickoffRequest) merge(k2 KickoffRequest) {
 	}
 }
 
-func getToken(r *http.Request) string {
-	token := r.Header.Get("Authorization")
-	if strings.HasPrefix(token, "Bearer ") {
-		return strings.TrimPrefix(token, "Bearer ")
-	}
-	return r.URL.Query().Get("token")
-}
-
 // verifySignature computes HMAC-SHA256 of the body using secret and compares
 // it (constant-time) to the provided signature string.
 // It is only called when a signature header was present from the provider.
@@ -151,7 +143,7 @@ func (k *KickoffWrangler) webhookHandler(w http.ResponseWriter, r *http.Request)
 	source := r.PathValue("source")
 	repo := r.PathValue("repo")
 
-	token := getToken(r)
+	token := basicauth.GetToken(r)
 	if token == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -377,7 +369,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	auth := basicauth.AuthCore{KeyDir: conf.Dir.Key}
+	auth := basicauth.AuthCore{
+		KeyDir:        conf.Dir.Key,
+		Debug:         conf.Debug != config.DebugLevelNone,
+		ShowSensitive: conf.Debug == config.DebugLevelShowSensitive,
+	}
 	auth.LoadAuth()
 
 	sharedSecrets := &config.SharedSecrets{Dir: conf.Dir.SharedSecrets}
@@ -408,6 +404,7 @@ func main() {
 	}
 
 	r := aerouter.NewRouter()
+	r.Use(conf.DebugMiddleware)
 	r.Use(auth.AuthMiddleware)
 
 	routes := []string{

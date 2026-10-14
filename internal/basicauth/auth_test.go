@@ -1,8 +1,10 @@
 package basicauth
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +13,62 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestGetToken(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		query  string
+		want   string
+	}{
+		{"bearer header", "Bearer mytoken", "", "mytoken"},
+		{"query token", "", "mytoken", "mytoken"},
+		{"header takes precedence", "Bearer headertok", "querytok", "headertok"},
+		{"no token", "", "", ""},
+		{"non-bearer header falls through to query", "Basic x", "q", "q"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/", nil)
+			if tt.header != "" {
+				req.Header.Set("Authorization", tt.header)
+			}
+			if tt.query != "" {
+				req.URL.RawQuery = "token=" + tt.query
+			}
+			if got := GetToken(req); got != tt.want {
+				t.Errorf("GetToken() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAuthorizeDebugPatterns(t *testing.T) {
+	old := log.Writer()
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(old)
+
+	re, _ := regexp.Compile(`^GET /api/.*`)
+	auth := &AuthCore{
+		Debug: true,
+		tokenMap: map[string]TokenRule{
+			"tok": {Regexps: []*regexp.Regexp{re}},
+		},
+	}
+	req := httptest.NewRequest("GET", "/api/x", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	if !auth.Authorize(req) {
+		t.Fatal("expected authorize")
+	}
+	s := buf.String()
+	if !strings.Contains(s, `considering patterns=["^GET /api/.*"]`) || !strings.Contains(s, `matched pattern="^GET /api/.*"`) {
+		t.Fatalf("missing pattern logs: %q", s)
+	}
+	if strings.Contains(s, "token=\"tok\"") {
+		t.Fatalf("token leaked without ShowSensitive: %q", s)
+	}
+}
 
 func TestLoadTokens(t *testing.T) {
 	// Create a temporary YAML file content

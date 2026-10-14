@@ -12,7 +12,7 @@
 {{ end }}
 {{ end }}
 EOF
-        destination   = "share-secrets/nomad-controlled.yml"
+        destination   = "shared-secrets/nomad-controlled.yml"
       }
 
       template {

@@ -19,7 +19,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	auth := basicauth.AuthCore{KeyDir: conf.Dir.Key}
+	auth := basicauth.AuthCore{
+		KeyDir:        conf.Dir.Key,
+		Debug:         conf.Debug != config.DebugLevelNone,
+		ShowSensitive: conf.Debug == config.DebugLevelShowSensitive,
+	}
 	auth.LoadAuth()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGUSR1)
@@ -36,6 +40,7 @@ func main() {
 
 	r := aerouter.NewRouter()
 
+	r.Use(conf.DebugMiddleware)
 	r.Use(auth.AuthMiddleware)
 
 	routes := []string{

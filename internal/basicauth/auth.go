@@ -17,12 +17,24 @@ type TokenRule struct {
 }
 
 type AuthCore struct {
-	KeyDir   string
-	authMu   sync.RWMutex
-	tokenMap map[string]TokenRule
+	KeyDir        string
+	Debug         bool
+	ShowSensitive bool
+	authMu        sync.RWMutex
+	tokenMap      map[string]TokenRule
 }
 
 type yamlConfig map[string][]string
+
+// GetToken extracts the auth token the same way Authorize does:
+// Authorization: Bearer <token>, else ?token=.
+func GetToken(r *http.Request) string {
+	token := r.Header.Get("Authorization")
+	if strings.HasPrefix(token, "Bearer ") {
+		return strings.TrimPrefix(token, "Bearer ")
+	}
+	return r.URL.Query().Get("token")
+}
 
 func (a *AuthCore) loadTokens(data []byte) error {
 	var config yamlConfig
@@ -50,24 +62,29 @@ func (a *AuthCore) LoadAuth() {
 	a.authMu.Lock()
 	defer a.authMu.Unlock()
 	a.tokenMap = make(map[string]TokenRule)
-	dir, _ := os.ReadDir(a.KeyDir)
+	dir, err := os.ReadDir(a.KeyDir)
+	if err != nil {
+		log.Printf("[auth] failed reading key dir %s: %v", a.KeyDir, err)
+		return
+	}
 	for _, f := range dir {
 		if f.IsDir() || (!strings.HasSuffix(f.Name(), ".yaml") && !strings.HasSuffix(f.Name(), ".yml")) {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(a.KeyDir, f.Name()))
+		path := filepath.Join(a.KeyDir, f.Name())
+		b, err := os.ReadFile(path)
 		if err != nil {
-			log.Println("[auth] failed reading " + f.Name())
+			log.Printf("[auth] failed reading %s: %v", path, err)
 			continue
 		}
 		err = a.loadTokens(b)
 		if err != nil {
-			log.Println("[auth] failed yaml parse on " + f.Name())
+			log.Printf("[auth] failed yaml parse on %s: %v", path, err)
 			continue
 		}
-		log.Println("[auth] loaded a file")
+		log.Printf("[auth] loaded %s", path)
 	}
-	log.Println("[auth] keys loaded")
+	log.Printf("[auth] keys loaded from %s (%d tokens)", a.KeyDir, len(a.tokenMap))
 }
 
 func (a *AuthCore) ReloadAuth() {
@@ -79,24 +96,46 @@ func (a *AuthCore) ReloadAuth() {
 func (a *AuthCore) Authorize(r *http.Request) bool {
 	a.authMu.RLock()
 	defer a.authMu.RUnlock()
-	token := r.Header.Get("Authorization")
-	if strings.HasPrefix(token, "Bearer ") {
-		token = strings.TrimPrefix(token, "Bearer ")
-	} else {
-		token = r.URL.Query().Get("token")
-		if token == "" {
-			return false
+	token := GetToken(r)
+	if token == "" {
+		if a.Debug {
+			log.Printf("[auth] no token for %s %s", r.Method, r.URL.Path)
 		}
-	}
-	rule, ok := a.tokenMap[token]
-	if !ok {
 		return false
 	}
+	rule, ok := a.tokenMap[token]
 	path := r.Method + " " + r.URL.Path
+	if !ok {
+		if a.Debug {
+			if a.ShowSensitive {
+				log.Printf("[auth] unknown token=%q for path=%q", token, path)
+			} else {
+				log.Printf("[auth] unknown token for path=%q", path)
+			}
+		}
+		return false
+	}
+	patterns := make([]string, len(rule.Regexps))
+	for i, re := range rule.Regexps {
+		patterns[i] = re.String()
+	}
+	if a.Debug {
+		if a.ShowSensitive {
+			log.Printf("[auth] token=%q path=%q considering patterns=%q", token, path, patterns)
+		} else {
+			log.Printf("[auth] path=%q considering patterns=%q", path, patterns)
+		}
+	}
 	for _, re := range rule.Regexps {
 		if re.MatchString(path) {
+			if a.Debug {
+				log.Printf("[auth] matched pattern=%q path=%q", re.String(), path)
+			}
 			return true
 		}
+	}
+	if a.Debug {
+		log.Printf("[auth] no pattern matched path=%q", path)
 	}
 	return false
 }

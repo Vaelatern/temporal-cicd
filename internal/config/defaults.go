@@ -8,17 +8,74 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
 	"github.com/sethvargo/go-envconfig"
 	"gopkg.in/yaml.v3"
 )
 
+type DebugLevel string
+
+const DebugLevelNone DebugLevel = ""
+const DebugLevelDebug DebugLevel = "debug"
+const DebugLevelShowSensitive DebugLevel = "show-sensitive"
+
+func parseDebugLevel(s string) DebugLevel {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "false", "0", "no", "off", "none", "nil":
+		return DebugLevelNone
+	case "show-sensitive":
+		return DebugLevelShowSensitive
+	default: // true, debug, True, and most other values
+		return DebugLevelDebug
+	}
+}
+
+func (d *DebugLevel) UnmarshalText(text []byte) error {
+	*d = parseDebugLevel(string(text))
+	return nil
+}
+
+func (d *DebugLevel) UnmarshalYAML(value *yaml.Node) error {
+	if value == nil || value.Tag == "!!null" {
+		*d = DebugLevelNone
+		return nil
+	}
+	var v any
+	if err := value.Decode(&v); err != nil {
+		return err
+	}
+	switch x := v.(type) {
+	case nil:
+		*d = DebugLevelNone
+	case bool:
+		if x {
+			*d = DebugLevelDebug
+		} else {
+			*d = DebugLevelNone
+		}
+	case string:
+		*d = parseDebugLevel(x)
+	case int:
+		if x == 0 {
+			*d = DebugLevelNone
+		} else {
+			*d = DebugLevelDebug
+		}
+	default:
+		*d = DebugLevelDebug
+	}
+	return nil
+}
+
 type Config struct {
-	Dir            Dir         `yaml:"dir,omitempty" json:"dir,omitempty" toml:"dir,omitempty"`
-	Cache          CacheConfig `yaml:"cache,omitempty" json:"cache,omitempty" toml:"cache,omitempty"`
-	Listen         string      `yaml:"listen,omitempty" json:"listen,omitempty" toml:"listen,omitempty"`
-	SharedSecrets  SharedSecretsConfig `yaml:"shared_secrets,omitempty" json:"shared_secrets,omitempty" toml:"shared_secrets,omitempty"`
+	Debug         DebugLevel          `env:"TCD_DEBUG, overwrite" yaml:"debug,omitempty" json:"debug,omitempty" toml:"debug,omitempty"`
+	Dir           Dir                 `yaml:"dir,omitempty" json:"dir,omitempty" toml:"dir,omitempty"`
+	Cache         CacheConfig         `yaml:"cache,omitempty" json:"cache,omitempty" toml:"cache,omitempty"`
+	Listen        string              `yaml:"listen,omitempty" json:"listen,omitempty" toml:"listen,omitempty"`
+	SharedSecrets SharedSecretsConfig `yaml:"shared_secrets,omitempty" json:"shared_secrets,omitempty" toml:"shared_secrets,omitempty"`
 }
 
 type Dir struct {
@@ -109,7 +166,26 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to process environment variables: %w", err)
 	}
 
+	if conf.Debug != DebugLevelNone {
+		conf.dumpWorkingConfig()
+	}
+
 	return &conf, nil
+}
+
+func (c *Config) dumpWorkingConfig() {
+	out := *c
+	if c.Debug != DebugLevelShowSensitive && len(c.Cache.Headers) > 0 {
+		out.Cache.Headers = make(map[string]string, len(c.Cache.Headers))
+		for k := range c.Cache.Headers {
+			out.Cache.Headers[k] = "***"
+		}
+	}
+	fmt.Printf("boot_time: %s\nworking config:\n", time.Now().Format(time.RFC3339Nano))
+	enc := yaml.NewEncoder(os.Stdout)
+	enc.SetIndent(2)
+	_ = enc.Encode(out)
+	_ = enc.Close()
 }
 
 func loadConfigDir(dirPath string) (*Config, error) {
@@ -173,6 +249,12 @@ func loadSingleConfigFile(path string) (*Config, error) {
 
 // mergeConfig is overly hardcoded but does merge the configurations down
 func mergeConfig(dst *Config, src Config) {
+	if src.Debug != "" {
+		dst.Debug = src.Debug
+	}
+	if src.Dir.SharedSecrets != "" {
+		dst.Dir.SharedSecrets = src.Dir.SharedSecrets
+	}
 	if src.Dir.Key != "" {
 		dst.Dir.Key = src.Dir.Key
 	}
@@ -211,4 +293,20 @@ func (c *Config) AddCacheHeaders(req *http.Request) {
 	for key, value := range c.Cache.Headers {
 		req.Header.Set(key, value)
 	}
+}
+
+// DebugMiddleware logs every request when debug is on.
+// Tokens appear only at show-sensitive, via basicauth.GetToken.
+func (c *Config) DebugMiddleware(next http.Handler) http.Handler {
+	if c.Debug == DebugLevelNone {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c.Debug == DebugLevelShowSensitive {
+			log.Printf("[debug] %s %s from %s token=%q", r.Method, r.URL.Path, r.RemoteAddr, basicauth.GetToken(r))
+		} else {
+			log.Printf("[debug] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		}
+		next.ServeHTTP(w, r)
+	})
 }

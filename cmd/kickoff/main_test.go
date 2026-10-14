@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Vaelatern/temporal-cicd/internal/basicauth"
 )
 
 func TestGetToken(t *testing.T) {
@@ -33,9 +35,9 @@ func TestGetToken(t *testing.T) {
 			if tt.query != "" {
 				req.URL.RawQuery = "token=" + tt.query
 			}
-			got := getToken(req)
+			got := basicauth.GetToken(req)
 			if got != tt.want {
-				t.Errorf("getToken() = %v, want %v", got, tt.want)
+				t.Errorf("GetToken() = %v, want %v", got, tt.want)
 			}
 		})
 	}
