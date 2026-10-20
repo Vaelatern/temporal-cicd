@@ -12,7 +12,7 @@
 {{ end }}
 {{ end }}
 EOF
-        destination   = "shared-secrets/nomad-controlled.yml"
+        destination   = "secrets/shared-secrets/nomad-controlled.yml"
       }
 
       template {
@@ -26,7 +26,7 @@ EOF
 {{ end }}
 {{ end }}
 EOF
-        destination   = "keys.d/nomad-secret-keys.yml"
+        destination   = "secrets/keys.d/nomad-secret-keys.yml"
       }
 [[ end ]]
 
@@ -44,16 +44,27 @@ EOF
       template {
 	env  = true
         data = <<EOF
-TCD_CONFIG_FILE="{{ env "NOMAD_TASK_DIR" }}/config.json"
+TCD_CONFIG_FILE="{{ env "NOMAD_TASK_DIR" }}/config/config.json"
 EOF
         destination   = "local/env/configuration"
       }
 
       template {
         data = <<EOF
-[[ dig "config" (dict) .Args | tojson ]]
+{{ if nomadVarExists [[ dig "config-var-path" "temporal-cicd/config" .Args | quote ]] }}
+{{ with nomadVar [[ dig "config-var-path" "temporal-cicd/config" .Args | quote ]] }}
+{{ . | toJSONPretty }}
+{{ end }}
+{{ end }}
 EOF
-        destination   = "local/config.json"
+        destination   = "local/config/config-vars.json"
+      }
+
+      template {
+        data = <<EOF
+[[ dig "config" (dict) .Args | toPrettyJson ]]
+EOF
+        destination   = "local/config/config.json"
       }
 [[ end ]]
 
@@ -84,7 +95,7 @@ job [[ getarg "jobname" .Args ]] {
         image = "ghcr.io/vaelatern/temporal-cicd/kickoff:[[ dig "version" "kickoff" (dig "version" "default" "master" .Args) .Args ]]"
         ports = ["http"]
         volumes = ["custom-kickoff:/custom-kickoff",
-        "keys.d:/keys"]
+        "local/keys.d:/keys"]
       }
 
       [[ template "config-file" . ]]
@@ -117,7 +128,7 @@ job [[ getarg "jobname" .Args ]] {
       config {
         image   = "ghcr.io/vaelatern/temporal-cicd/cache:[[ dig "version" "cache" (dig "version" "default" "master" .Args) .Args ]]"
         ports   = ["http"]
-        volumes = ["repos:/repos", "ssh-keys:/ssh-keys", "keys.d:/keys"]
+        volumes = ["repos:/repos", "ssh-keys:/ssh-keys", "local/keys.d:/keys"]
       }
 
       [[ template "config-file" . ]]
@@ -150,7 +161,7 @@ job [[ getarg "jobname" .Args ]] {
       config {
         image   = "ghcr.io/vaelatern/temporal-cicd/artifacts:[[ dig "version" "artifacts" (dig "version" "default" "master" .Args) .Args ]]"
         ports   = ["http"]
-        volumes = ["artifacts:/artifacts", "keys.d:/keys"]
+        volumes = ["artifacts:/artifacts", "local/keys.d:/keys"]
       }
 
       [[ template "config-file" . ]]
