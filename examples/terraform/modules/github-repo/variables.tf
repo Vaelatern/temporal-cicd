@@ -8,12 +8,6 @@ variable "git_url" {
   description = "Upstream SSH git URL, e.g. git@github.com:org/repo.git"
 }
 
-variable "ssh_reading_private_key" {
-  type        = string
-  sensitive   = true
-  description = "SSH private key the cache uses to fetch the upstream."
-}
-
 variable "github_repository" {
   type        = string
   description = "GitHub repo name (without owner) for the webhook resource."

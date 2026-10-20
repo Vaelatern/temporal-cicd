@@ -12,7 +12,21 @@ terraform {
     github = {
       source = "integrations/github"
     }
+    tls = {
+      source = "hashicorp/tls"
+    }
   }
+}
+
+resource "tls_private_key" "reading" {
+  algorithm = "ED25519"
+}
+
+resource "github_repository_deploy_key" "reading" {
+  title      = "lrcicd-${var.name}"
+  repository = var.github_repository
+  key        = tls_private_key.reading.public_key_openssh
+  read_only  = true
 }
 
 resource "random_password" "auth_token" {
@@ -58,9 +72,9 @@ resource "nomad_variable" "shared_secrets" {
 }
 
 resource "lrcicd_repo" "this" {
-  name                     = var.name
-  url                      = var.git_url
-  ssh_reading_private_key  = var.ssh_reading_private_key
+  name                    = var.name
+  url                     = var.git_url
+  ssh_reading_private_key = tls_private_key.reading.private_key_openssh
 }
 
 resource "github_repository_webhook" "kickoff" {
