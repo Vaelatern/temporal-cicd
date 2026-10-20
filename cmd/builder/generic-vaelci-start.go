@@ -115,9 +115,15 @@ func (g GenericBuilder) GenericVaelCiCdStart(ctx workflow.Context, input Workflo
 
 	rawCtx := workflow.WithActivityOptions(ctx, ao)
 
+	err := workflow.ExecuteActivity(rawCtx, "UpdateCache", input).Get(rawCtx, nil)
+	if err != nil {
+		logger.Error("Failed to update cache", "error", err)
+		return err
+	}
+
 	// Determine build flow by reading .vaelci.json from tarball
 	var vaelciConfig VaelCiConfig
-	err := workflow.ExecuteActivity(rawCtx, "DetermineSpecificBuildFlow", input).Get(rawCtx, &vaelciConfig)
+	err = workflow.ExecuteActivity(rawCtx, "DetermineSpecificBuildFlow", input).Get(rawCtx, &vaelciConfig)
 	if err != nil {
 		logger.Error("Failed to determine build flow", "error", err)
 		return err
