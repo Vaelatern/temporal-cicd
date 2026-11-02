@@ -1,28 +1,35 @@
-.PHONY: build build-raw clean test
+.PHONY: build build-raw clean test upload raw-upload
 
 DOCKER?=docker
+SERVICES=artifacts builder cache kickoff deployer slop-ui
 
 build-raw: artifacts builder cache kickoff deployer slop-ui
 
 build: docker-build-artifacts docker-build-builder docker-build-cache docker-build-kickoff docker-build-deployer docker-build-slop-ui
 
 docker-build-artifacts:
-	$(DOCKER) build -f Dockerfile.artifacts .
+	$(DOCKER) build -t artifacts:latest -f Dockerfile.artifacts .
 
 docker-build-builder:
-	$(DOCKER) build -f Dockerfile.builder .
+	$(DOCKER) build -t builder:latest -f Dockerfile.builder .
 
 docker-build-cache:
-	$(DOCKER) build -f Dockerfile.cache .
+	$(DOCKER) build -t cache:latest -f Dockerfile.cache .
 
 docker-build-kickoff:
-	$(DOCKER) build -f Dockerfile.kickoff .
+	$(DOCKER) build -t kickoff:latest -f Dockerfile.kickoff .
 
 docker-build-deployer:
-	$(DOCKER) build -f Dockerfile.deployer .
+	$(DOCKER) build -t deployer:latest -f Dockerfile.deployer .
 
 docker-build-slop-ui:
-	$(DOCKER) build -f Dockerfile.slop-ui .
+	$(DOCKER) build -t slop-ui:latest -f Dockerfile.slop-ui .
+
+upload:
+	for s in $(SERVICES); do \
+		$(DOCKER) tag "$$s:latest" "$(UPLOAD_REGISTRY)/$(PROJECT)/$$s:$(TAG)"; \
+		$(DOCKER) push "$(UPLOAD_REGISTRY)/$(PROJECT)/$$s:$(TAG)"; \
+	done
 
 test:
 	go test ./...
@@ -47,3 +54,8 @@ deployer: cmd/deployer internal/*/*.go internal/*/*/*.go
 
 slop-ui: cmd/slop-ui internal/*/*.go internal/*/*/*.go
 	go build ./cmd/slop-ui
+
+raw-upload:
+	for s in $(SERVICES); do \
+		oras push "$(UPLOAD_REGISTRY)/$(PROJECT)/artifacts/$$s:$(TAG)" "$$s"; \
+	done
